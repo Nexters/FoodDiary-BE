@@ -1,0 +1,35 @@
+[project]
+name = "fooddiary-be"
+version = "0.1.0"
+description = "음식 사진 기반 기록 서비스 Backend API"
+requires-python = ">=3.12"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = [".venv", "__pycache__"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+exclude = [".venv", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "ASYNC", "Q", "RUF"]
+ignore = []
+fixable = ["ALL"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

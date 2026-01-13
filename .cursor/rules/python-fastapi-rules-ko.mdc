@@ -1,0 +1,86 @@
+---
+alwaysApply: false
+---
+
+# FastAPI Development Rules Guide
+
+Python과 FastAPI를 사용하여 확장 가능하고 유지보수성 높은 API를 개발할 때 지켜야 할 원칙과 스타일 가이드입니다.
+
+---
+
+## 핵심 원칙
+
+- 간결하고 정확한 Python 예제 중심의 기술 문서 작성
+- 함수형, 선언적 프로그래밍 우선, 가능한 클래스 사용 최소화
+- 코드 중복을 피하고 반복과 모듈화를 우선시
+- 명확한 변수명에 보조 동사(is_active, has_permission 등) 사용
+- 디렉터리 및 파일명은 소문자와 언더스코어 형식 (e.g., routers/user_routes.py)
+- 명명된(exported named) 방식으로 라우터, 유틸리티 함수 내보내기
+- 객체를 받고 객체를 반환하는(RORO) 패턴 준수
+
+---
+
+## Python / FastAPI 스타일
+
+- 동기 함수는 `def`, 비동기 함수는 `async def` 사용
+- 모든 함수에 타입 힌트 적용, 입력 검증 시 Pydantic 모델 우선 사용
+- 파일 구조 분명히: 내보내는 라우터, 하위 라우터, 유틸, 정적 파일, 타입(모델/스키마)
+- 조건문에서 불필요한 중괄호 제거
+- 한 줄 조건문은 중괄호 없이 간결히 작성 (예: `if condition: do_something()`)
+
+---
+
+## 에러 처리 및 검증
+
+- 함수 초반에 에러와 엣지 케이스 처리
+- 에러 조건일 경우 조기 반환(early return) 적용, 중첩 if문 지양
+- 정상 흐름(happy path)은 함수 후반 배치해 가독성 증진
+- 불필요한 else 구문을 피하고, if-return 방식으로 코드를 단순화
+- 방어적 코딩(guard clauses) 적용
+- 일관적인 에러 로깅과 사용자 친화적 메시지 제공
+- 맞춤형 에러 타입 또는 팩토리 사용으로 에러 처리 표준화
+
+---
+
+## 의존성
+
+- FastAPI, Pydantic v2
+- 비동기 DB 라이브러리(asyncpg, aiomysql 등)
+- SQLAlchemy 2.0 (ORM 사용 시)
+
+---
+
+## FastAPI 특화 가이드
+
+- 함수형 컴포넌트 및 Pydantic 모델로 입력/출력 스키마 작성
+- 타입 어노테이션이 명확한 선언적 라우팅 구현
+- 동기/비동기 함수 규칙 철저 준수
+- `@app.on_event("startup")`, `@app.on_event("shutdown")` 최소화, lifespan 컨텍스트 매니저 사용 권장
+- 미들웨어 활용: 로깅, 에러 모니터링, 성능 향상
+- I/O 바운드 작업은 비동기 함수로 최적화
+- HTTPException으로 예상 에러 처리
+- 미들웨어로 예기치 않은 에러 처리 및 모니터링
+- Pydantic BaseModel로 표준화된 입력/출력 검증
+
+---
+
+## 성능 최적화
+
+- 차단(blocking) I/O 최소화, 데이터베이스 및 외부 API는 비동기 호출 사용
+- Redis, 메모리 캐시 등으로 정적/빈번 조회 데이터 캐싱
+- Pydantic 통한 데이터 직렬화/역직렬화 최적화
+- 대량 데이터/응답에 대해 지연 로딩(lazy loading) 적용
+
+---
+
+## 주요 관례
+
+1. FastAPI 의존성 주입 시스템 활용해 상태 및 공유 자원 관리
+2. API 성능 최우선: 응답시간, 지연, 처리량 집중관리
+3. 블로킹 연산 제한, 비동기 처리와 명확한 라우터 및 의존성 설계로 가독성·유지보수성 유지
+
+---
+
+## 참고
+
+FastAPI 공식 문서 내 Data Models, Path Operations, Middleware 섹션에서 추가 Best Practice 확인 가능
