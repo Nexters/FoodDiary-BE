@@ -9,4 +9,3 @@ router = APIRouter(tags=["Health"])
 async def health_check() -> HealthResponse:
     """서버 상태 확인 엔드포인트"""
     return HealthResponse(status="ok")
-
