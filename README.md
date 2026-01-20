@@ -12,6 +12,25 @@
 
 ## 로컬 실행
 
+### Docker 사용 (권장)
+
+```bash
+# 1. 환경변수 설정
+cp .env.example .env
+# .env 파일에서 필요한 값 수정 (API 키, DB 비밀번호 등)
+
+# 2. 컨테이너 실행
+docker-compose -f docker/docker-compose.local.yml up -d
+
+# 3. 로그 확인
+docker-compose -f docker/docker-compose.local.yml logs -f api
+
+# 4. 종료
+docker-compose -f docker/docker-compose.local.yml down
+```
+
+### Python 직접 실행
+
 ```bash
 # 1. 가상환경
 python -m venv .venv
@@ -26,6 +45,8 @@ cp .env.example .env
 # 4. 서버 실행
 uvicorn app.main:app --reload
 ```
+
+### 접속 주소
 
 - Health Check: http://localhost:8000/health
 - API 문서: http://localhost:8000/docs
