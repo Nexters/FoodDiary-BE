@@ -4,6 +4,10 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
 
+# Database
+sqlmodel==0.0.22
+psycopg2-binary==2.9.10
+
 # Development
 python-dotenv==1.0.1
 black==24.10.0

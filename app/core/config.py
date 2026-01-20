@@ -8,13 +8,17 @@ class Settings(BaseSettings):
     # CORS 설정
     CORS_ORIGINS: list[str] = ["*"]
 
+    # Database 설정
+    DATABASE_URL: str = ""
+
+    # API Keys
     KAKAO_REST_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"
         case_sensitive = True
-        extra="ignore"  
+        extra = "ignore"
 
 
 settings = Settings()

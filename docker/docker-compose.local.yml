@@ -3,8 +3,6 @@
 # ======================
 # FastAPI + PostgreSQL 개발 환경 구성
 
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -34,6 +32,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: fooddiary-api:latest
     container_name: fooddiary-api
     restart: unless-stopped
     env_file:
@@ -43,10 +42,6 @@ services:
       DATABASE_URL: postgresql://fooddiary_user:fooddiary1234@db:5432/fooddiary
     ports:
       - "8000:8000"
-    volumes:
-      # Development: mount source code for hot reload
-      - ../app:/app/app:ro
-      - ../tests:/app/tests:ro
     depends_on:
       db:
         condition: service_healthy
