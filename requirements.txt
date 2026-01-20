@@ -5,7 +5,7 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 
 # Database
-sqlmodel==0.0.22
+sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
 
 # Development
