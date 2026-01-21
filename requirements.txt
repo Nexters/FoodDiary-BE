@@ -7,6 +7,10 @@ pydantic-settings==2.7.1
 # Database
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
+# Auth
+httpx==0.28.1
+python-jose[cryptography]==3.3.0
+email-validator==2.1.1
 
 # Development
 python-dotenv==1.0.1
