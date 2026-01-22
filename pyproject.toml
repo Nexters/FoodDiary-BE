@@ -27,7 +27,7 @@ exclude = [".venv", "__pycache__"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "ASYNC", "Q", "RUF"]
-ignore = []
+ignore = ["B008"]  # FastAPI Depends() in argument defaults is the recommended pattern
 fixable = ["ALL"]
 
 [tool.ruff.format]
