@@ -133,6 +133,7 @@ async def test_login_missing_email_in_claims_fails(
     - Apple token에 email 클레임 누락
     - TokenVerificationError 발생
     - 401 Unauthorized 응답
+    - 내부 에러 정보는 노출하지 않음
     """
 
     # Given: Mock Apple token verification to return claims without email
@@ -145,9 +146,9 @@ async def test_login_missing_email_in_claims_fails(
     payload = create_login_request_payload()
     response = await test_client.post("/auth/login", json=payload)
 
-    # Then: Response 401
+    # Then: Response 401 with generic message (no internal error details exposed)
     assert response.status_code == 401
-    assert "필수 클레임 누락" in response.json()["detail"]
+    assert response.json()["detail"] == "인증에 실패했습니다. 다시 시도해 주세요."
 
 
 @pytest.mark.asyncio

@@ -40,7 +40,7 @@ async def login(
     except TokenVerificationError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
+            detail="인증에 실패했습니다. 다시 시도해 주세요.",
         ) from e
 
     # 2. 로그인 처리 (생성 또는 업데이트)
@@ -54,7 +54,7 @@ async def login(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"로그인 처리 실패: {e!s}",
+            detail="로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
         ) from e
 
     # 3. Access token 생성
