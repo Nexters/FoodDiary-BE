@@ -21,11 +21,19 @@ SET timezone = 'Asia/Seoul';
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider VARCHAR(10) NOT NULL,
+    provider_user_id VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
+    last_login_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    deleted_at TIMESTAMP,
+
+    CONSTRAINT unique_provider_user UNIQUE (provider, provider_user_id)
 );
+
+-- Users 테이블 인덱스
+CREATE INDEX IF NOT EXISTS idx_users_provider_user_id
+    ON users(provider, provider_user_id);
 
 -- Database 기본 설정 완료 메시지
 DO $$
