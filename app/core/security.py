@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 
@@ -16,7 +16,7 @@ def create_access_token(user_id: str, provider: str) -> str:
     Returns:
         인코딩된 JWT 토큰
     """
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "provider": provider,
