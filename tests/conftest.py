@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
@@ -8,6 +10,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from testcontainers.postgres import PostgresContainer
+
+# database.py import 전에 환경변수 설정 (모듈 레벨 엔진 생성을 위해 필요)
+os.environ.setdefault("DATABASE_URL", "postgresql://dummy:dummy@localhost/dummy")
 
 from app.core.config import Settings
 from app.core.database import get_session
