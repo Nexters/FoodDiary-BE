@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
+from app.models.base import Base
 
 # SQLAlchemy 엔진 생성
 engine = create_engine(
@@ -24,3 +25,8 @@ def get_session():
         yield session
     finally:
         session.close()
+
+
+def create_tables():
+    """모든 테이블 생성"""
+    Base.metadata.create_all(bind=engine)
