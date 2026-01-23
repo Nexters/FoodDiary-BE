@@ -1,9 +1,11 @@
 """인증 서비스 모듈"""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from jose import jwt
 
 from app.core.config import settings
@@ -114,6 +116,76 @@ class GoogleAuthService:
             response.raise_for_status()
             return GoogleUserInfo(**response.json())
 
+    def _get_allowed_client_ids(self) -> list[str]:
+        """허용된 Google 클라이언트 ID 목록을 반환합니다."""
+        client_ids = [settings.GOOGLE_CLIENT_ID]
+        if settings.GOOGLE_ANDROID_CLIENT_ID:
+            client_ids.append(settings.GOOGLE_ANDROID_CLIENT_ID)
+        return client_ids
+
+    async def authenticate_with_id_token(self, id_token: str) -> AuthCallbackResponse:
+        """
+        안드로이드/iOS에서 받은 Google id_token으로 인증합니다.
+
+        Args:
+            id_token: Google Sign-In SDK에서 받은 id_token
+
+        Returns:
+            사용자 정보와 JWT 토큰
+
+        Raises:
+            ValueError: id_token 검증 실패 시
+        """
+        try:
+            # Google id_token 검증 (audience 검증 없이)
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token,
+                google_requests.Request(),
+                audience=None,  # 수동으로 검증
+            )
+
+            # 발급자 확인
+            if idinfo["iss"] not in [
+                "accounts.google.com",
+                "https://accounts.google.com",
+            ]:
+                raise ValueError("잘못된 발급자입니다.")
+
+            # audience(클라이언트 ID) 수동 검증 - 웹/안드로이드 모두 허용
+            allowed_client_ids = self._get_allowed_client_ids()
+            if idinfo.get("aud") not in allowed_client_ids:
+                raise ValueError(
+                    f"허용되지 않은 클라이언트입니다. aud: {idinfo.get('aud')}"
+                )
+
+            # 사용자 정보 추출
+            user_id = idinfo["sub"]
+            email = idinfo.get("email", "")
+            name = idinfo.get("name", "")
+            picture = idinfo.get("picture")
+
+            # JWT 토큰 생성
+            jwt_token = create_access_token(
+                data={
+                    "sub": user_id,
+                    "email": email,
+                    "name": name,
+                }
+            )
+
+            return AuthCallbackResponse(
+                user=UserResponse(
+                    id=user_id,
+                    email=email,
+                    name=name,
+                    picture=picture,
+                ),
+                token=TokenResponse(access_token=jwt_token),
+            )
+
+        except ValueError as e:
+            raise ValueError(f"id_token 검증 실패: {e}") from e
+
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """
@@ -127,9 +199,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         JWT 토큰 문자열
     """
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta
-        or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(UTC) + (
+        expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     to_encode.update({"exp": expire})
     return jwt.encode(

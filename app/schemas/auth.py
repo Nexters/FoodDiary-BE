@@ -1,6 +1,12 @@
 from pydantic import BaseModel, EmailStr
 
 
+class GoogleIdTokenRequest(BaseModel):
+    """안드로이드/iOS에서 Google Sign-In으로 받은 id_token"""
+
+    id_token: str
+
+
 class GoogleUserInfo(BaseModel):
     """Google OAuth에서 받아오는 사용자 정보"""
 
@@ -34,4 +40,3 @@ class AuthCallbackResponse(BaseModel):
 
     user: UserResponse
     token: TokenResponse
-

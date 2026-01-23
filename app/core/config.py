@@ -18,9 +18,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
 
     # Google OAuth 설정
-    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_ID: str = ""  # 웹/백엔드용
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+
+    # 안드로이드 앱 클라이언트 ID (id_token 검증 시 허용)
+    GOOGLE_ANDROID_CLIENT_ID: str = ""
 
     # JWT 설정
     JWT_SECRET_KEY: str = "your-super-secret-key-change-in-production"
