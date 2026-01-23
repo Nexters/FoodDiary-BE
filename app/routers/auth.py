@@ -1,19 +1,20 @@
 """인증 라우터 모듈"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
-from app.deps.auth import get_google_auth_service
+from app.deps.auth import GoogleAuthServiceDep
 from app.schemas.auth import AuthCallbackResponse, GoogleIdTokenRequest
-from app.services.auth import GoogleAuthService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.get("/google/login")
 async def google_login(
+    service: GoogleAuthServiceDep,
     state: str | None = None,
-    service: GoogleAuthService = Depends(get_google_auth_service),
 ) -> RedirectResponse:
     """Google OAuth 로그인 페이지로 리다이렉트합니다."""
     return RedirectResponse(url=service.get_auth_url(state))
@@ -21,8 +22,8 @@ async def google_login(
 
 @router.get("/google/callback", response_model=AuthCallbackResponse)
 async def google_callback(
-    code: str = Query(..., description="Google에서 받은 authorization code"),
-    service: GoogleAuthService = Depends(get_google_auth_service),
+    service: GoogleAuthServiceDep,
+    code: Annotated[str, Query(description="Google에서 받은 authorization code")],
 ) -> AuthCallbackResponse:
     """
     Google OAuth 콜백을 처리합니다.
@@ -44,7 +45,7 @@ async def google_callback(
 @router.post("/google/verify", response_model=AuthCallbackResponse)
 async def google_verify_id_token(
     request: GoogleIdTokenRequest,
-    service: GoogleAuthService = Depends(get_google_auth_service),
+    service: GoogleAuthServiceDep,
 ) -> AuthCallbackResponse:
     """
     안드로이드/iOS에서 받은 Google id_token을 검증합니다.

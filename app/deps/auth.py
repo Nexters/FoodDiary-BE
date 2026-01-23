@@ -1,5 +1,7 @@
 """인증 관련 의존성 모듈"""
 
+from typing import Annotated
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -13,8 +15,13 @@ def get_google_auth_service() -> GoogleAuthService:
     return GoogleAuthService()
 
 
+# 타입 별칭 정의
+GoogleAuthServiceDep = Annotated[GoogleAuthService, Depends(get_google_auth_service)]
+BearerTokenDep = Annotated[HTTPAuthorizationCredentials | None, Depends(security)]
+
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    credentials: BearerTokenDep,
 ) -> dict:
     """
     현재 인증된 사용자를 반환합니다.
