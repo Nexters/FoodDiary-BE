@@ -1,0 +1,61 @@
+name: Backend CD
+
+# main 브랜치에 push될 때 워크플로우 실행
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      # 1. 저장소 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Docker 로그인
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_REPO_USER_ID }}
+          password: ${{ secrets.DOCKER_REPO_PWD }}
+
+      # 3. Docker 이미지 빌드 및 푸시
+      - name: Build and push Docker image
+        run: |
+          cp .env.example .env
+          docker build -t ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }} -f docker/Dockerfile .
+          docker tag ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }} ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:latest
+          docker push ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:latest
+
+      # 4. SSH로 서버 접속 후 배포
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.API_SERVER_HOST }}
+          username: ${{ secrets.API_SERVER_USERNAME }}
+          key: ${{ secrets.API_SERVER_KEY }}
+          port: ${{ secrets.API_SERVER_PORT }}
+          script: |
+            # 기존 컨테이너 중지 및 제거
+            docker stop fooddiary-api || true
+            docker rm fooddiary-api || true
+
+            # 사용하지 않는 모든 이미지 제거
+            docker image prune -a -f
+
+            # 새 이미지 pull
+            docker pull ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
+
+            # 새 컨테이너 실행 (민감한 환경변수만 주입)
+            docker run -d \
+              --name fooddiary-api \
+              -p 8000:8000 \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e APPLE_CLIENT_ID="${{ secrets.APPLE_CLIENT_ID }}" \
+              -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
+              --restart unless-stopped \
+              ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
