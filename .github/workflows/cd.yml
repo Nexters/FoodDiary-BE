@@ -42,17 +42,17 @@ jobs:
           port: ${{ secrets.API_SERVER_PORT }}
           script: |
             # 기존 컨테이너 중지 및 제거
-            docker stop fooddiary-api || true
-            docker rm fooddiary-api || true
+            sudo docker stop fooddiary-api || true
+            sudo docker rm fooddiary-api || true
 
             # 사용하지 않는 모든 이미지 제거
-            docker image prune -a -f
+            sudo docker image prune -a -f
 
             # 새 이미지 pull
-            docker pull ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
+            sudo docker pull ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
 
             # 새 컨테이너 실행 (민감한 환경변수만 주입)
-            docker run -d \
+            sudo docker run -d \
               --name fooddiary-api \
               -p 8000:8000 \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
