@@ -40,8 +40,12 @@ class HourlyDistribution(BaseModel):
 class DiaryTimeStats(BaseModel):
     """일기 작성 시간대 분포"""
 
-    most_active_hour: int = Field(..., ge=0, le=23, description="가장 많이 작성한 시간대 (0-23)")
-    distribution: list[HourlyDistribution] = Field(..., description="시간대별 작성 빈도")
+    most_active_hour: int = Field(
+        ..., ge=0, le=23, description="가장 많이 작성한 시간대 (0-23)"
+    )
+    distribution: list[HourlyDistribution] = Field(
+        ..., description="시간대별 작성 빈도"
+    )
 
 
 class InsightsResponse(BaseModel):
