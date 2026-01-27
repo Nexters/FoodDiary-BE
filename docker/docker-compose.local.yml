@@ -1,7 +1,8 @@
 # ======================
 # FoodDiary Backend Docker Compose
 # ======================
-# FastAPI + PostgreSQL 개발 환경 구성
+# PostgreSQL 로컬 개발 환경 구성
+# 애플리케이션은 로컬에서 직접 실행
 
 services:
   # PostgreSQL Database
@@ -21,33 +22,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - fooddiary-network
-
-  # FastAPI Application
-  api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    image: fooddiary-api:latest
-    container_name: fooddiary-api
-    restart: unless-stopped
-    env_file:
-      - ../.env
-    environment:
-      # Database (Docker network 전용)
-      DATABASE_URL: postgresql://fooddiary_user:fooddiary1234@db:5432/fooddiary
-    ports:
-      - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
     networks:
       - fooddiary-network
 
