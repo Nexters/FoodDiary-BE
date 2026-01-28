@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,6 +63,9 @@ async def verify_oauth_token(provider: OAuthProvider, id_token: str) -> tuple[st
     """
     if provider == OAuthProvider.APPLE:
         claims = await verify_apple_token(id_token)
+        return claims.get("sub"), claims.get("email")
+    elif provider == OAuthProvider.GOOGLE:
+        claims = await verify_google_token(id_token)
         return claims.get("sub"), claims.get("email")
     else:
         raise TokenVerificationError(f"지원하지 않는 provider: {provider}")
@@ -220,3 +225,183 @@ def _validate_apple_claims(claims: dict[str, Any]) -> None:
     missing_claims = required_claims - set(claims.keys())
     if missing_claims:
         raise ValueError(f"필수 클레임 누락: {missing_claims}")
+
+
+async def verify_google_token(
+    id_token: str,
+    client_id: str | None = None,
+) -> dict[str, Any]:
+    """
+    Google ID 토큰을 검증하고 클레임을 반환합니다.
+
+    검증 과정:
+    1. Google의 공개키로 JWT 서명 검증
+    2. 클레임 검증 (issuer, audience, expiration 등)
+
+    Args:
+        id_token: Google에서 받은 ID 토큰
+        client_id: 검증할 클라이언트 ID (None이면 모든 허용된 클라이언트 검증)
+
+    Returns:
+        검증된 JWT 클레임셋
+
+    Raises:
+        TokenVerificationError: 토큰 검증 실패 시
+    """
+    try:
+        # 허용된 클라이언트 ID 목록 생성
+        allowed_client_ids = []
+        if settings.GOOGLE_CLIENT_ID:
+            allowed_client_ids.append(settings.GOOGLE_CLIENT_ID)
+        if settings.GOOGLE_ANDROID_CLIENT_ID:
+            allowed_client_ids.append(settings.GOOGLE_ANDROID_CLIENT_ID)
+
+        if not allowed_client_ids:
+            raise TokenVerificationError("Google 클라이언트 ID가 설정되지 않았습니다")
+
+        # 특정 client_id가 지정된 경우 해당 ID로만 검증
+        if client_id:
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token,
+                google_requests.Request(),
+                audience=client_id,
+            )
+        else:
+            # audience=None으로 검증 후 수동으로 확인
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token,
+                google_requests.Request(),
+                audience=None,
+            )
+
+            # 발급자 확인
+            if idinfo["iss"] not in [
+                "accounts.google.com",
+                "https://accounts.google.com",
+            ]:
+                raise TokenVerificationError("잘못된 발급자입니다")
+
+            # audience 수동 검증
+            if idinfo.get("aud") not in allowed_client_ids:
+                raise TokenVerificationError(
+                    f"허용되지 않은 클라이언트입니다. aud: {idinfo.get('aud')}"
+                )
+
+        # 필수 클레임 검증
+        _validate_google_claims(idinfo)
+
+        return idinfo
+
+    except ValueError as e:
+        raise TokenVerificationError(f"Google ID 토큰 검증 실패: {e!s}") from e
+    except Exception as e:
+        raise TokenVerificationError(f"Google ID 토큰 검증 중 오류: {e!s}") from e
+
+
+def _validate_google_claims(claims: dict[str, Any]) -> None:
+    """
+    Google 필수 클레임 존재 여부를 검증합니다.
+
+    Args:
+        claims: 검증할 클레임
+
+    Raises:
+        ValueError: 필수 클레임 누락 시
+    """
+    required_claims = {"sub", "email"}
+    missing_claims = required_claims - set(claims.keys())
+    if missing_claims:
+        raise ValueError(f"필수 클레임 누락: {missing_claims}")
+
+
+# ==============================================
+# 웹 OAuth 헬퍼 함수들 (서버 테스트용)
+# ==============================================
+
+
+def get_google_oauth_url(state: str | None = None) -> str:
+    """
+    Google OAuth 인증 URL 생성 (웹 테스트용)
+
+    Args:
+        state: CSRF 방지용 state 파라미터
+
+    Returns:
+        Google 로그인 페이지 URL
+    """
+    from urllib.parse import urlencode
+
+    params = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    if state:
+        params["state"] = state
+
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+
+async def exchange_google_code_for_user_info(code: str) -> tuple[str, str]:
+    """
+    Google Authorization Code를 사용자 정보로 교환 (웹 테스트용)
+
+    Process:
+    1. code → access_token 교환
+    2. access_token → userinfo 조회
+    3. (sub, email) 반환 → 기존 process_oauth_login() 재사용!
+
+    Args:
+        code: Google에서 받은 authorization code
+
+    Returns:
+        Tuple of (provider_user_id, email)
+
+    Raises:
+        TokenVerificationError: 토큰 교환 또는 사용자 정보 조회 실패 시
+    """
+    try:
+        # 1. Authorization code → access token 교환
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                },
+            )
+            token_response.raise_for_status()
+            tokens = token_response.json()
+
+        access_token = tokens.get("access_token")
+        if not access_token:
+            raise TokenVerificationError("토큰 교환에 실패했습니다")
+
+        # 2. Access token → 사용자 정보 조회
+        async with httpx.AsyncClient() as client:
+            userinfo_response = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            userinfo_response.raise_for_status()
+            userinfo = userinfo_response.json()
+
+        # 3. 필수 정보 추출 (기존 로직과 동일한 형식으로 반환)
+        provider_user_id = userinfo.get("id")
+        email = userinfo.get("email")
+
+        if not provider_user_id or not email:
+            raise TokenVerificationError("필수 사용자 정보 누락")
+
+        return provider_user_id, email
+
+    except httpx.HTTPError as e:
+        raise TokenVerificationError(f"Google API 호출 실패: {e!s}") from e
+    except Exception as e:
+        raise TokenVerificationError(f"사용자 정보 조회 중 오류: {e!s}") from e
