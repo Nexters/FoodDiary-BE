@@ -1,64 +1,70 @@
-"""인증 라우터 모듈"""
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import Annotated
+from app.core.database import get_session
+from app.core.security import create_access_token
+from app.schemas.auth import LoginRequest, LoginResponse
+from app.services.auth import (
+    TokenVerificationError,
+    process_oauth_login,
+    verify_oauth_token,
+)
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import RedirectResponse
-
-from app.deps.auth import GoogleAuthServiceDep
-from app.schemas.auth import AuthCallbackResponse, GoogleIdTokenRequest
-
-router = APIRouter(prefix="/auth", tags=["Auth"])
-
-
-@router.get("/google/login")
-async def google_login(
-    service: GoogleAuthServiceDep,
-    state: str | None = None,
-) -> RedirectResponse:
-    """Google OAuth 로그인 페이지로 리다이렉트합니다."""
-    return RedirectResponse(url=service.get_auth_url(state))
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.get("/google/callback", response_model=AuthCallbackResponse)
-async def google_callback(
-    service: GoogleAuthServiceDep,
-    code: Annotated[str, Query(description="Google에서 받은 authorization code")],
-) -> AuthCallbackResponse:
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    request: LoginRequest,
+    session: AsyncSession = Depends(get_session),
+) -> LoginResponse:
     """
-    Google OAuth 콜백을 처리합니다.
+    OAuth 로그인 (Apple, Google 등)
 
-    Google 로그인 성공 후 리다이렉트되는 엔드포인트입니다.
-    Authorization code를 사용해 사용자 정보를 조회하고 JWT 토큰을 발급합니다.
+    Process:
+    1. OAuth provider의 ID token 검증
+    2. 첫 로그인 시 사용자 생성, 재로그인 시 last_login 업데이트
+    3. JWT access token 발급 (만료시간 없음)
+
+    Returns:
+        - id: 사용자 UUID
+        - access_token: JWT 토큰
+        - is_first: 첫 로그인 여부
     """
+    # 1. OAuth token 검증
     try:
-        return await service.authenticate(code)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
+        provider_user_id, email = await verify_oauth_token(
+            request.provider,
+            request.id_token,
+        )
+    except TokenVerificationError as e:
         raise HTTPException(
-            status_code=400,
-            detail=f"Google 로그인 처리 중 오류가 발생했습니다: {e!s}",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="인증에 실패했습니다. 다시 시도해 주세요.",
         ) from e
 
-
-@router.post("/google/verify", response_model=AuthCallbackResponse)
-async def google_verify_id_token(
-    request: GoogleIdTokenRequest,
-    service: GoogleAuthServiceDep,
-) -> AuthCallbackResponse:
-    """
-    안드로이드/iOS에서 받은 Google id_token을 검증합니다.
-
-    모바일 앱에서 Google Sign-In SDK로 받은 id_token을 전송하면
-    검증 후 사용자 정보와 JWT 토큰을 발급합니다.
-    """
+    # 2. 로그인 처리 (생성 또는 업데이트)
     try:
-        return await service.authenticate_with_id_token(request.id_token)
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
+        user, is_first = await process_oauth_login(
+            session,
+            request.provider.value,
+            provider_user_id,
+            email,
+        )
     except Exception as e:
         raise HTTPException(
-            status_code=400,
-            detail=f"Google 토큰 검증 중 오류가 발생했습니다: {e!s}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
         ) from e
+
+    # 3. Access token 생성
+    access_token = create_access_token(
+        user_id=str(user.id),
+        provider=request.provider.value,
+    )
+
+    return LoginResponse(
+        id=user.id,
+        access_token=access_token,
+        is_first=is_first,
+    )

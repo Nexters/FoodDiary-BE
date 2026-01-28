@@ -1,42 +1,47 @@
-from pydantic import BaseModel, EmailStr
+from enum import Enum
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class GoogleIdTokenRequest(BaseModel):
-    """안드로이드/iOS에서 Google Sign-In으로 받은 id_token"""
+class OAuthProvider(str, Enum):
+    """지원하는 OAuth provider"""
 
-    id_token: str
-
-
-class GoogleUserInfo(BaseModel):
-    """Google OAuth에서 받아오는 사용자 정보"""
-
-    id: str
-    email: EmailStr
-    verified_email: bool
-    name: str
-    given_name: str | None = None
-    family_name: str | None = None
-    picture: str | None = None
+    APPLE = "apple"
+    GOOGLE = "google"
 
 
-class TokenResponse(BaseModel):
-    """JWT 토큰 응답"""
+class LoginRequest(BaseModel):
+    """OAuth 로그인 요청"""
 
-    access_token: str
-    token_type: str = "bearer"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "provider": "apple",
+                "id_token": (
+                    "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFkZWFkYmVlZiIsInR5cCI6IkpXVCJ9..."
+                ),
+            }
+        }
+    )
+
+    provider: OAuthProvider = Field(..., description="OAuth provider (apple or google)")
+    id_token: str = Field(..., min_length=1, description="OAuth provider의 ID 토큰")
 
 
-class UserResponse(BaseModel):
-    """사용자 정보 응답"""
+class LoginResponse(BaseModel):
+    """OAuth 로그인 응답"""
 
-    id: str
-    email: EmailStr
-    name: str
-    picture: str | None = None
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "is_first": True,
+            }
+        }
+    )
 
-
-class AuthCallbackResponse(BaseModel):
-    """OAuth 콜백 응답"""
-
-    user: UserResponse
-    token: TokenResponse
+    id: UUID = Field(..., description="사용자 고유 ID")
+    access_token: str = Field(..., description="JWT access token")
+    is_first: bool = Field(..., description="첫 로그인 여부 (true = 첫 로그인)")
