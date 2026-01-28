@@ -19,8 +19,18 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
 
     # API Keys
+    # External API Keys
     KAKAO_REST_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+
+    # Google OAuth 설정
+    GOOGLE_CLIENT_ID: str = ""  # 웹/백엔드용
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+
+    # 안드로이드 앱 클라이언트 ID (id_token 검증 시 허용)
+    GOOGLE_ANDROID_CLIENT_ID: str = ""
 
     # Apple OAuth Settings
     APPLE_CLIENT_ID: str = ""

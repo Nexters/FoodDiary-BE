@@ -141,3 +141,32 @@ def mock_verify_apple_token_failure(monkeypatch):
         raise TokenVerificationError("Invalid token signature")
 
     monkeypatch.setattr("app.services.auth.verify_apple_token", mock_verify)
+
+
+@pytest.fixture
+def mock_verify_google_token_success(monkeypatch):
+    """Google token 검증 성공 Mock"""
+
+    async def mock_verify(id_token: str, **kwargs):
+        # Return mock claims based on token
+        return {
+            "sub": "google_user_456",
+            "email": "test@gmail.com",
+            "iss": "https://accounts.google.com",
+            "aud": "test-google-client-id.apps.googleusercontent.com",
+            "exp": 9999999999,
+            "iat": 1234567890,
+            "email_verified": True,
+        }
+
+    monkeypatch.setattr("app.services.auth.verify_google_token", mock_verify)
+
+
+@pytest.fixture
+def mock_verify_google_token_failure(monkeypatch):
+    """Google token 검증 실패 Mock"""
+
+    async def mock_verify(id_token: str, **kwargs):
+        raise TokenVerificationError("Invalid Google token")
+
+    monkeypatch.setattr("app.services.auth.verify_google_token", mock_verify)
