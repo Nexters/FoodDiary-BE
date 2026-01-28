@@ -58,5 +58,9 @@ jobs:
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               -e APPLE_CLIENT_ID="${{ secrets.APPLE_CLIENT_ID }}" \
               -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
+              -e GOOGLE_ANDROID_CLIENT_ID="${{ secrets.GOOGLE_ANDROID_CLIENT_ID }}" \
+              -e GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              -e GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              -e GOOGLE_REDIRECT_URI="${{ secrets.GOOGLE_REDIRECT_URI }}" \
               --restart unless-stopped \
               ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
