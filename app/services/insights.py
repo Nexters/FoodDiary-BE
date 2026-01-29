@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -240,21 +240,25 @@ def calculate_keywords(current_diaries: list[Diary]) -> list[str]:
 
 def get_month_date_range(year: int, month: int) -> tuple[datetime, datetime]:
     """
-    주어진 년월의 시작일시와 종료일시를 반환
+    주어진 년월의 시작일시와 종료일시를 반환 (KST 기준)
 
     Args:
         year: 년도
         month: 월 (1-12)
 
     Returns:
-        (시작 datetime, 종료 datetime) 튜플 (timezone-aware UTC)
+        (시작 datetime, 종료 datetime) 튜플
+        KST 기준으로 계산되어 UTC로 변환됨
     """
-    start_date = datetime(year, month, 1, tzinfo=UTC)
+    kst = timezone(timedelta(hours=9))
 
-    # 다음 달 1일 계산
+    # KST 기준으로 해당 월의 1일 00:00:00
+    start_date = datetime(year, month, 1, tzinfo=kst)
+
+    # 다음 달 1일 계산 (KST 기준)
     if month == 12:
-        end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
+        end_date = datetime(year + 1, 1, 1, tzinfo=kst)
     else:
-        end_date = datetime(year, month + 1, 1, tzinfo=UTC)
+        end_date = datetime(year, month + 1, 1, tzinfo=kst)
 
     return start_date, end_date
