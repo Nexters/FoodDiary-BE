@@ -1,12 +1,14 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.dependencies import get_current_user_id
 from app.core.security import create_access_token
-from app.schemas.auth import LoginRequest, LoginResponse
+from app.schemas.auth import LoginRequest, LoginResponse, VerifyResponse
 from app.services.auth import (
     TokenVerificationError,
     exchange_google_code_for_user_info,
@@ -73,6 +75,19 @@ async def login(
         access_token=access_token,
         is_first=is_first,
     )
+
+
+@router.get("/verify", response_model=VerifyResponse)
+async def verify_token(
+    user_id: UUID = Depends(get_current_user_id),
+) -> VerifyResponse:
+    """
+    JWT 토큰의 유효성을 검증합니다.
+
+    - 유효한 토큰: 200 OK
+    - 무효한 토큰: 401 Unauthorized (get_current_user_id에서 자동 처리)
+    """
+    return VerifyResponse(message="유효한 토큰입니다")
 
 
 # ==============================================

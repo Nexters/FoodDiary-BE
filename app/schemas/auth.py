@@ -45,3 +45,17 @@ class LoginResponse(BaseModel):
     id: UUID = Field(..., description="사용자 고유 ID")
     access_token: str = Field(..., description="JWT access token")
     is_first: bool = Field(..., description="첫 로그인 여부 (true = 첫 로그인)")
+
+
+class VerifyResponse(BaseModel):
+    """JWT 토큰 검증 응답"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "message": "유효한 토큰입니다",
+            }
+        }
+    )
+
+    message: str = Field(..., description="검증 결과 메시지")
