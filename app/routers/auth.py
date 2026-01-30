@@ -77,15 +77,65 @@ async def login(
     )
 
 
-@router.get("/verify", response_model=VerifyResponse)
+@router.get(
+    "/verify",
+    response_model=VerifyResponse,
+    responses={
+        200: {
+            "description": "토큰이 유효함",
+            "content": {
+                "application/json": {
+                    "example": {"message": "유효한 토큰입니다"}
+                }
+            },
+        },
+        401: {
+            "description": "토큰이 유효하지 않음",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "missing_token": {
+                            "summary": "토큰 누락",
+                            "value": {"detail": "Not authenticated"},
+                        },
+                        "invalid_token": {
+                            "summary": "유효하지 않은 토큰",
+                            "value": {"detail": "유효하지 않은 토큰입니다"},
+                        },
+                        "malformed_token": {
+                            "summary": "잘못된 토큰 형식",
+                            "value": {"detail": "토큰 형식이 올바르지 않습니다"},
+                        },
+                    }
+                }
+            },
+        },
+    },
+    summary="JWT 토큰 유효성 검증",
+    description="클라이언트가 보유한 access_token이 유효한지 확인합니다.",
+)
 async def verify_token(
     user_id: UUID = Depends(get_current_user_id),
 ) -> VerifyResponse:
     """
     JWT 토큰의 유효성을 검증합니다.
 
-    - 유효한 토큰: 200 OK
-    - 무효한 토큰: 401 Unauthorized (get_current_user_id에서 자동 처리)
+    클라이언트가 보유한 access_token이 유효한지 확인하는 엔드포인트입니다.
+    로그인 상태를 확인하거나 토큰 갱신 여부를 판단할 때 사용합니다.
+
+    Process:
+    1. Authorization 헤더에서 Bearer 토큰 추출
+    2. JWT 서명 및 만료시간 검증
+    3. 유효한 경우 성공 응답 반환
+
+    Returns:
+        - message: 검증 결과 메시지
+
+    Raises:
+        - 401 Unauthorized: 토큰이 없거나 유효하지 않은 경우
+            - "Not authenticated": Authorization 헤더 누락
+            - "유효하지 않은 토큰입니다": JWT 서명이 잘못됨
+            - "토큰 형식이 올바르지 않습니다": JWT 페이로드가 잘못됨
     """
     return VerifyResponse(message="유효한 토큰입니다")
 
