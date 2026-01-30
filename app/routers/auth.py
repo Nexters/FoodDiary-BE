@@ -84,9 +84,7 @@ async def login(
         200: {
             "description": "토큰이 유효함",
             "content": {
-                "application/json": {
-                    "example": {"message": "유효한 토큰입니다"}
-                }
+                "application/json": {"example": {"message": "유효한 토큰입니다"}}
             },
         },
         401: {
