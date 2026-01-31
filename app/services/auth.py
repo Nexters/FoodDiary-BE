@@ -232,6 +232,131 @@ async def verify_google_token(
     client_id: str | None = None,
 ) -> dict[str, Any]:
     """
+    Google ID 토큰 또는 Firebase ID 토큰을 검증하고 클레임을 반환합니다.
+
+    Firebase를 통한 Google 로그인 시 Firebase ID Token이 발급되며,
+    이 경우 issuer가 'https://securetoken.google.com/{project_id}' 형식입니다.
+
+    검증 과정:
+    1. 토큰 디코딩하여 issuer 확인
+    2. Firebase ID Token이면 Firebase Admin SDK로 검증
+    3. Google ID Token이면 Google 공개키로 검증
+
+    Args:
+        id_token: Google 또는 Firebase에서 받은 ID 토큰
+        client_id: 검증할 클라이언트 ID (None이면 모든 허용된 클라이언트 검증)
+
+    Returns:
+        검증된 JWT 클레임셋
+
+    Raises:
+        TokenVerificationError: 토큰 검증 실패 시
+    """
+    try:
+        # 토큰을 디코딩하여 issuer 확인 (검증 없이)
+        unverified_claims = jwt.get_unverified_claims(id_token)
+        issuer = unverified_claims.get("iss", "")
+
+        # Firebase ID Token인 경우
+        if issuer.startswith("https://securetoken.google.com/"):
+            return await _verify_firebase_token(id_token)
+
+        # Google ID Token인 경우
+        return await _verify_google_id_token(id_token, client_id)
+
+    except ValueError as e:
+        raise TokenVerificationError(f"Google ID 토큰 검증 실패: {e!s}") from e
+    except Exception as e:
+        raise TokenVerificationError(f"Google ID 토큰 검증 중 오류: {e!s}") from e
+
+
+async def _verify_firebase_token(id_token: str) -> dict[str, Any]:
+    """
+    Firebase ID Token을 공개키로 검증하고 클레임을 반환합니다.
+
+    Firebase ID Token은 Google의 공개키로 서명되지만,
+    Google OAuth2와는 다른 키 세트를 사용합니다.
+
+    Args:
+        id_token: Firebase에서 받은 ID 토큰
+
+    Returns:
+        검증된 JWT 클레임셋
+
+    Raises:
+        TokenVerificationError: 토큰 검증 실패 시
+    """
+    try:
+        # Firebase 공개키 URL
+        firebase_certs_url = (
+            "https://www.googleapis.com/robot/v1/metadata/x509/"
+            "securetoken@system.gserviceaccount.com"
+        )
+
+        # Firebase 공개키 가져오기
+        async with httpx.AsyncClient() as client:
+            response = await client.get(firebase_certs_url, timeout=5.0)
+            response.raise_for_status()
+            firebase_certs = response.json()
+
+        # JWT 검증
+        expected_issuer = (
+            f"https://securetoken.google.com/{settings.FIREBASE_PROJECT_ID}"
+        )
+
+        idinfo = jwt.decode(
+            id_token,
+            firebase_certs,
+            algorithms=["RS256"],
+            audience=settings.FIREBASE_PROJECT_ID,
+            issuer=expected_issuer,
+            options={
+                "verify_signature": True,
+                "verify_aud": True,
+                "verify_iss": True,
+                "verify_exp": True,
+            },
+        )
+
+        # 필수 클레임 검증
+        _validate_firebase_claims(idinfo)
+
+        return idinfo
+
+    except JWTError as e:
+        raise TokenVerificationError(f"Firebase ID 토큰 검증 실패: {e!s}") from e
+    except httpx.HTTPError as e:
+        raise TokenVerificationError(f"Firebase 공개키 조회 실패: {e!s}") from e
+    except Exception as e:
+        raise TokenVerificationError(f"Firebase ID 토큰 검증 실패: {e!s}") from e
+
+
+def _validate_firebase_claims(claims: dict[str, Any]) -> None:
+    """
+    Firebase 필수 클레임 존재 여부를 검증합니다.
+
+    Args:
+        claims: 검증할 클레임
+
+    Raises:
+        ValueError: 필수 클레임 누락 시
+    """
+    # Firebase ID Token에서는 'sub' 또는 'user_id'가 사용자 ID
+    # 'email'은 필수
+    user_id = claims.get("sub") or claims.get("user_id")
+    email = claims.get("email")
+
+    if not user_id:
+        raise ValueError("필수 클레임 누락: sub 또는 user_id")
+    if not email:
+        raise ValueError("필수 클레임 누락: email")
+
+
+async def _verify_google_id_token(
+    id_token: str,
+    client_id: str | None = None,
+) -> dict[str, Any]:
+    """
     Google ID 토큰을 검증하고 클레임을 반환합니다.
 
     검증 과정:
@@ -248,54 +373,48 @@ async def verify_google_token(
     Raises:
         TokenVerificationError: 토큰 검증 실패 시
     """
-    try:
-        # 허용된 클라이언트 ID 목록 생성
-        allowed_client_ids = []
-        if settings.GOOGLE_CLIENT_ID:
-            allowed_client_ids.append(settings.GOOGLE_CLIENT_ID)
-        if settings.GOOGLE_ANDROID_CLIENT_ID:
-            allowed_client_ids.append(settings.GOOGLE_ANDROID_CLIENT_ID)
+    # 허용된 클라이언트 ID 목록 생성
+    allowed_client_ids = []
+    if settings.GOOGLE_CLIENT_ID:
+        allowed_client_ids.append(settings.GOOGLE_CLIENT_ID)
+    if settings.GOOGLE_ANDROID_CLIENT_ID:
+        allowed_client_ids.append(settings.GOOGLE_ANDROID_CLIENT_ID)
 
-        if not allowed_client_ids:
-            raise TokenVerificationError("Google 클라이언트 ID가 설정되지 않았습니다")
+    if not allowed_client_ids:
+        raise TokenVerificationError("Google 클라이언트 ID가 설정되지 않았습니다")
 
-        # 특정 client_id가 지정된 경우 해당 ID로만 검증
-        if client_id:
-            idinfo = google_id_token.verify_oauth2_token(
-                id_token,
-                google_requests.Request(),
-                audience=client_id,
+    # 특정 client_id가 지정된 경우 해당 ID로만 검증
+    if client_id:
+        idinfo = google_id_token.verify_oauth2_token(
+            id_token,
+            google_requests.Request(),
+            audience=client_id,
+        )
+    else:
+        # audience=None으로 검증 후 수동으로 확인
+        idinfo = google_id_token.verify_oauth2_token(
+            id_token,
+            google_requests.Request(),
+            audience=None,
+        )
+
+        # 발급자 확인
+        if idinfo["iss"] not in [
+            "accounts.google.com",
+            "https://accounts.google.com",
+        ]:
+            raise TokenVerificationError("잘못된 발급자입니다")
+
+        # audience 수동 검증
+        if idinfo.get("aud") not in allowed_client_ids:
+            raise TokenVerificationError(
+                f"허용되지 않은 클라이언트입니다. aud: {idinfo.get('aud')}"
             )
-        else:
-            # audience=None으로 검증 후 수동으로 확인
-            idinfo = google_id_token.verify_oauth2_token(
-                id_token,
-                google_requests.Request(),
-                audience=None,
-            )
 
-            # 발급자 확인
-            if idinfo["iss"] not in [
-                "accounts.google.com",
-                "https://accounts.google.com",
-            ]:
-                raise TokenVerificationError("잘못된 발급자입니다")
+    # 필수 클레임 검증
+    _validate_google_claims(idinfo)
 
-            # audience 수동 검증
-            if idinfo.get("aud") not in allowed_client_ids:
-                raise TokenVerificationError(
-                    f"허용되지 않은 클라이언트입니다. aud: {idinfo.get('aud')}"
-                )
-
-        # 필수 클레임 검증
-        _validate_google_claims(idinfo)
-
-        return idinfo
-
-    except ValueError as e:
-        raise TokenVerificationError(f"Google ID 토큰 검증 실패: {e!s}") from e
-    except Exception as e:
-        raise TokenVerificationError(f"Google ID 토큰 검증 중 오류: {e!s}") from e
+    return idinfo
 
 
 def _validate_google_claims(claims: dict[str, Any]) -> None:

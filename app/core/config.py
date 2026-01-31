@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # 안드로이드 앱 클라이언트 ID (id_token 검증 시 허용)
     GOOGLE_ANDROID_CLIENT_ID: str = ""
 
+    # Firebase 설정 (모바일 앱용)
+    FIREBASE_PROJECT_ID: str = ""
+
     # Apple OAuth Settings
     APPLE_CLIENT_ID: str = ""
     APPLE_JWK_URL: str = "https://appleid.apple.com/auth/keys"
