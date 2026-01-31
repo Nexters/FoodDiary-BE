@@ -22,7 +22,7 @@ class DiaryBase(BaseModel):
     category: str | None = Field(None, description="음식 카테고리")
     note: str | None = Field(None, description="메모")
     tags: list[str] = Field(default=[], description="태그 리스트")
-    photo_counts: int = Field(default=0, description="포함된 사진 수", ge=0)
+    photo_count: int = Field(default=0, description="포함된 사진 수", ge=0)
 
 
 # ======================
@@ -85,7 +85,7 @@ class DiaryResponse(DiaryBase):
     user_id: UUID = Field(..., description="작성자 ID")
     cover_photo_id: int | None = Field(None, description="대표 사진 ID")
     cover_photo_url: str | None = Field(None, description="대표 사진 URL")
-    photo_counts: int = Field(..., description="포함된 사진 수", ge=0)
+    photo_count: int = Field(..., description="포함된 사진 수", ge=0)
     created_at: datetime = Field(..., description="생성 시각")
     updated_at: datetime = Field(..., description="수정 시각")
 

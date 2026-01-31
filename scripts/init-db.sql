@@ -21,19 +21,19 @@ SET timezone = 'Asia/Seoul';
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider VARCHAR(10) NOT NULL,
-    provider_id VARCHAR(255) NOT NULL,
+    provider_user_id VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     last_login_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP,
 
-    CONSTRAINT unique_provider_user UNIQUE (provider, provider_id)
+    CONSTRAINT unique_provider_user UNIQUE (provider, provider_user_id)
 );
 
 -- Users 테이블 인덱스
-CREATE INDEX IF NOT EXISTS idx_users_provider_id
-    ON users(provider, provider_id);
+CREATE INDEX IF NOT EXISTS idx_users_provider_user_id
+    ON users(provider, provider_user_id);
 
 -- ======================
 -- Diaries 테이블
@@ -49,9 +49,10 @@ CREATE TABLE IF NOT EXISTS diaries (
     cover_photo_id INTEGER,
     note TEXT,
     tags JSONB DEFAULT '[]'::jsonb,
-    photo_counts INTEGER NOT NULL DEFAULT 0,
+    photo_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
     
     CONSTRAINT unique_user_date_time UNIQUE (user_id, diary_date, time_type)
 );
@@ -71,8 +72,7 @@ CREATE TABLE IF NOT EXISTS diary_analysis (
     restaurant_candidates JSONB DEFAULT '[]'::jsonb,
     category_candidates JSONB DEFAULT '[]'::jsonb,
     menu_candidates JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ======================
@@ -147,11 +147,6 @@ CREATE TRIGGER update_users_updated_at
 
 CREATE TRIGGER update_diaries_updated_at 
     BEFORE UPDATE ON diaries 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_diary_analysis_updated_at 
-    BEFORE UPDATE ON diary_analysis 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 

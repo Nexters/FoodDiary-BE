@@ -27,12 +27,12 @@
 - Google / Apple OAuth 기반
 - 고유 user_id
 
-| **필드**    | **설명**                         |
-| ----------- | -------------------------------- |
-| id          | PK                               |
-| provider    | google / apple                   |
-| email       |                                  |
-| provider_id | OAuth Provider에서 제공해주는 id |
+| **필드**         | **설명**                         |
+| ---------------- | -------------------------------- |
+| id               | PK                               |
+| provider         | google / apple                   |
+| email            |                                  |
+| provider_user_id | OAuth Provider에서 제공해주는 id |
 
 ---
 
@@ -54,7 +54,10 @@
 | cover_photo_id  | 대표 썸네일 사진                                               |
 | note            | 메모 (필요하면)                                                |
 | tags            | 다이어리에 최종적으로 보여질 태그(일단 사진들의 음식명 리스트) |
-| photo_counts    | 다이어리에 포함된 사진의 수 (기본값: 0)                        |
+| photo_count     | 다이어리에 포함된 사진의 수                                    |
+| created_at      |                                                                |
+| updated_at      |                                                                |
+| deleted_at      |                                                                |
 
 ---
 

@@ -33,13 +33,14 @@ class Diary(Base):
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    photo_counts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    photo_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         nullable=False, default=datetime.utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
         nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="diaries")
@@ -95,9 +96,6 @@ class DiaryAnalysis(Base):
     menu_candidates: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         nullable=False, default=datetime.utcnow
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
     # Relationships

@@ -72,13 +72,13 @@ docker exec fooddiary-db psql -U fooddiary_user -d fooddiary -c "\dt"
 
 #### 주요 테이블
 
-| 테이블                   | 설명                                | 주요 필드                 |
-| ------------------------ | ----------------------------------- | ------------------------- |
-| `users`                  | Google/Apple OAuth 사용자 정보      | provider_id (OAuth ID)    |
-| `diaries`                | 끼니별 일기 (아침/점심/저녁/간식)   | diary_date, photo_counts  |
-| `diary_analysis`         | 다이어리 단위 AI 추론 결과 (후보)   | restaurant_candidates     |
-| `photos`                 | 업로드된 사진 정보 (EXIF, GPS 포함) | taken_at, taken_location  |
-| `photo_analysis_results` | 사진별 AI 분석 결과 (후보)          | keywords, menu_candidates |
+| 테이블                   | 설명                                | 주요 필드                   |
+| ------------------------ | ----------------------------------- | --------------------------- |
+| `users`                  | Google/Apple OAuth 사용자 정보      | provider_user_id (OAuth ID) |
+| `diaries`                | 끼니별 일기 (아침/점심/저녁/간식)   | diary_date, photo_count     |
+| `diary_analysis`         | 다이어리 단위 AI 추론 결과 (후보)   | restaurant_candidates       |
+| `photos`                 | 업로드된 사진 정보 (EXIF, GPS 포함) | taken_at, taken_location    |
+| `photo_analysis_results` | 사진별 AI 분석 결과 (후보)          | keywords, menu_candidates   |
 
 #### 관계도
 
