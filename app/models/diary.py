@@ -1,8 +1,8 @@
 import uuid
-from datetime import date, datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, ForeignKey, Index, Integer, String, Text, desc, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, desc, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,7 +24,9 @@ class Diary(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    diary_date: Mapped[date] = mapped_column(Date, nullable=False)
+    diary_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     time_type: Mapped[str] = mapped_column(String(20), nullable=False)
     restaurant_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -35,12 +37,17 @@ class Diary(Base):
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     photo_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
-    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="diaries")

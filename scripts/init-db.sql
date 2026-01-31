@@ -42,7 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_users_provider_user_id
 CREATE TABLE IF NOT EXISTS diaries (
     id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    diary_date DATE NOT NULL,
+    diary_date TIMESTAMP WITH TIME ZONE NOT NULL,
     time_type VARCHAR(20) NOT NULL CHECK (time_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
     restaurant_name VARCHAR(255),
     category VARCHAR(100),

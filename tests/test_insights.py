@@ -162,6 +162,7 @@ class TestInsightsHappyPath:
             diary = Diary(
                 user_id=user.id,
                 diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                time_type="lunch",
                 category="한식",
                 photo_count=5,
             )
@@ -171,6 +172,7 @@ class TestInsightsHappyPath:
         diary = Diary(
             user_id=user.id,
             diary_date=datetime(now.year, now.month, 10, 12, 0, tzinfo=UTC),
+            time_type="dinner",
             category="양식",
             photo_count=MIN_DIARY_THRESHOLD,
         )
@@ -221,6 +223,7 @@ class TestInsightsHappyPath:
             diary = Diary(
                 user_id=user.id,
                 diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                time_type="lunch",
                 category="한식",
                 photo_count=5,
             )
@@ -230,9 +233,10 @@ class TestInsightsHappyPath:
         deleted_diary = Diary(
             user_id=user.id,
             diary_date=datetime(now.year, now.month, 20, 12, 0, tzinfo=UTC),
+            time_type="dinner",
             category="한식",
             photo_count=100,  # 큰 숫자
-            deleted_at=datetime.now(UTC),  # 삭제됨!
+            deleted_at=now,  # 삭제됨!
         )
         test_db_session.add(deleted_diary)
 
@@ -353,6 +357,7 @@ class TestInsightsHappyPath:
         other_diary = Diary(
             user_id=other_user.id,
             diary_date=datetime(now.year, now.month, 1, 12, 0, tzinfo=UTC),
+            time_type="lunch",
             category="한식",
             photo_count=100,  # 많은 사진
         )
