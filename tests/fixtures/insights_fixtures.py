@@ -14,6 +14,7 @@ def create_current_month_diaries(
 
     diaries = []
     categories = ["한식", "양식", "중식", "일식"]
+    time_types = ["breakfast", "lunch", "dinner", "snack"]
 
     for i in range(count):
         diaries.append(
@@ -27,6 +28,7 @@ def create_current_month_diaries(
                     0,
                     tzinfo=UTC,
                 ),
+                "time_type": time_types[i % len(time_types)],
                 "category": categories[i % len(categories)],
                 "photo_count": base_photo_count + i,
                 "note": f"테스트 노트 {i+1}",
@@ -56,6 +58,7 @@ def create_previous_month_diaries(
 
     diaries = []
     categories = ["양식", "중식"]
+    time_types = ["lunch", "dinner"]
 
     for i in range(count):
         diaries.append(
@@ -69,6 +72,7 @@ def create_previous_month_diaries(
                     0,
                     tzinfo=UTC,
                 ),
+                "time_type": time_types[i % len(time_types)],
                 "category": categories[i % len(categories)],
                 "photo_count": base_photo_count + i,
                 "note": f"저번 달 노트 {i+1}",

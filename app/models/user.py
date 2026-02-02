@@ -1,12 +1,16 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 from app.models.mixins import TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.diary import Diary
 
 
 class User(Base, TimestampMixin):
@@ -21,3 +25,9 @@ class User(Base, TimestampMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+    # Relationships
+    diaries: Mapped[list["Diary"]] = relationship("Diary", back_populates="user")
+
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, email={self.email}, provider={self.provider})>"

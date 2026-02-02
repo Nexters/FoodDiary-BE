@@ -1,9 +1,53 @@
 from app.schemas.auth import LoginRequest, LoginResponse, OAuthProvider
+from app.schemas.diary import (
+    AnalysisStatus,
+    DiariesByDateResponse,
+    DiaryAnalysisResponse,
+    DiaryBase,
+    DiaryConfirm,
+    DiaryCreate,
+    DiaryResponse,
+    DiaryUpdate,
+    DiaryWithPhotos,
+    PhotoInDiary,
+    RestaurantCandidate,
+    TimeType,
+)
 from app.schemas.health import HealthResponse
+from app.schemas.photo import (
+    BatchUploadResponse,
+    MenuCandidate,
+    PhotoAnalysisResultResponse,
+    PhotoBase,
+    PhotoCreate,
+    PhotoResponse,
+    PhotoUploadResult,
+    PhotoWithAnalysis,
+)
 
 __all__ = [
+    "AnalysisStatus",
+    "BatchUploadResponse",
+    "DiariesByDateResponse",
+    "DiaryAnalysisResponse",
+    "DiaryBase",
+    "DiaryConfirm",
+    "DiaryCreate",
+    "DiaryResponse",
+    "DiaryUpdate",
+    "DiaryWithPhotos",
     "HealthResponse",
     "LoginRequest",
     "LoginResponse",
+    "MenuCandidate",
     "OAuthProvider",
+    "PhotoAnalysisResultResponse",
+    "PhotoBase",
+    "PhotoCreate",
+    "PhotoInDiary",
+    "PhotoResponse",
+    "PhotoUploadResult",
+    "PhotoWithAnalysis",
+    "RestaurantCandidate",
+    "TimeType",
 ]
