@@ -16,9 +16,7 @@ class Photo(Base):
 
     __tablename__ = "photos"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     diary_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("diaries.id", ondelete="CASCADE"),
@@ -28,9 +26,7 @@ class Photo(Base):
     taken_at: Mapped[datetime | None] = mapped_column(nullable=True)
     # PostgreSQL POINT 타입: "(longitude, latitude)" 형태로 저장
     # 예: "(127.027621, 37.497928)"
-    taken_location: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
-    )
+    taken_location: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         nullable=False, default=datetime.utcnow
     )
@@ -59,24 +55,18 @@ class PhotoAnalysisResult(Base):
 
     __tablename__ = "photo_analysis_results"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     photo_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("photos.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
     )
-    food_category: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
-    )
+    food_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     restaurant_name_candidates: Mapped[list] = mapped_column(
         JSONB, nullable=False, default=list
     )
-    menu_candidates: Mapped[list] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
+    menu_candidates: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     keywords: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     raw_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
