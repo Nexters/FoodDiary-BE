@@ -1,5 +1,4 @@
-from datetime import date as DateType
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -16,7 +15,7 @@ AnalysisStatus = Literal["pending", "processing", "done", "failed"]
 class DiaryBase(BaseModel):
     """Diary 기본 스키마"""
 
-    diary_date: DateType = Field(..., description="일기 날짜")
+    diary_date: date = Field(..., description="일기 날짜")
     time_type: TimeType = Field(..., description="끼니 종류")
     restaurant_name: str | None = Field(None, description="식당명")
     category: str | None = Field(None, description="음식 카테고리")
@@ -34,7 +33,7 @@ class DiaryCreate(BaseModel):
     """Diary 생성 스키마 (내부 사용)"""
 
     user_id: UUID
-    diary_date: DateType
+    diary_date: date
     time_type: TimeType
 
 
@@ -150,7 +149,7 @@ class DiariesByDateResponse(BaseModel):
         }
     )
 
-    query_date: DateType = Field(..., description="조회한 날짜")
+    query_date: date = Field(..., description="조회한 날짜")
     diaries: list[DiaryWithPhotos] = Field(default=[], description="다이어리 목록")
 
 
