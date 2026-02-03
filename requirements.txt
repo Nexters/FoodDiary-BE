@@ -15,6 +15,12 @@ python-jose[cryptography]==3.3.0
 google-auth==2.27.0
 email-validator==2.1.1
 
+# Image Processing (EXIF)
+Pillow>=10.4.0
+
+# AI/LLM
+google-generativeai>=0.8.6
+
 # Development
 python-dotenv==1.0.1
 black==24.10.0

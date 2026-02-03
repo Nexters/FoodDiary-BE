@@ -34,6 +34,32 @@ class PhotoCreate(BaseModel):
 
 
 # ======================
+# Analysis Result Schemas (먼저 정의)
+# ======================
+
+
+class MenuCandidate(BaseModel):
+    """메뉴 후보"""
+
+    name: str = Field(..., description="메뉴명")
+    price: int | None = Field(None, description="가격", ge=0)
+    confidence: float | None = Field(None, description="신뢰도 (0~1)", ge=0, le=1)
+
+
+class PhotoAnalysisResult(BaseModel):
+    """사진 분석 결과 (업로드 응답에 포함)"""
+
+    food_category: str | None = Field(None, description="음식 카테고리")
+    restaurant_candidates: list[RestaurantCandidate] = Field(
+        default=[], description="식당 후보 리스트"
+    )
+    menu_candidates: list[MenuCandidate] = Field(
+        default=[], description="메뉴 후보 리스트"
+    )
+    keywords: list[str] = Field(default=[], description="음식 키워드")
+
+
+# ======================
 # Response Schemas
 # ======================
 
@@ -62,6 +88,19 @@ class PhotoUploadResult(BaseModel):
                 "photo_id": 101,
                 "diary_id": 12,
                 "time_type": "lunch",
+                "image_url": "data/photos/abc123.jpg",
+                "analysis": {
+                    "food_category": "한식",
+                    "restaurant_candidates": [
+                        {
+                            "name": "명동교자",
+                            "confidence": 0.92,
+                            "address": "서울시 중구",
+                        }
+                    ],
+                    "menu_candidates": [{"name": "칼국수"}],
+                    "keywords": ["얼큰한", "구수한"],
+                },
             }
         }
     )
@@ -69,6 +108,10 @@ class PhotoUploadResult(BaseModel):
     photo_id: int = Field(..., description="생성된 사진 ID")
     diary_id: int = Field(..., description="연결된 다이어리 ID")
     time_type: TimeType = Field(..., description="분류된 끼니 종류")
+    image_url: str = Field(..., description="이미지 URL")
+    analysis: PhotoAnalysisResult | None = Field(
+        None, description="분석 결과 (분석 완료 시)"
+    )
 
 
 class BatchUploadResponse(BaseModel):
@@ -82,27 +125,26 @@ class BatchUploadResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "created": [
-                    {"photo_id": 101, "diary_id": 12, "time_type": "lunch"},
-                    {"photo_id": 102, "diary_id": 13, "time_type": "dinner"},
+                    {
+                        "photo_id": 101,
+                        "diary_id": 12,
+                        "time_type": "lunch",
+                        "image_url": "data/photos/abc123.jpg",
+                        "analysis": {
+                            "food_category": "한식",
+                            "restaurant_candidates": [
+                                {"name": "명동교자", "confidence": 0.92}
+                            ],
+                            "menu_candidates": [{"name": "칼국수"}],
+                            "keywords": ["얼큰한"],
+                        },
+                    }
                 ]
             }
         }
     )
 
     created: list[PhotoUploadResult] = Field(..., description="생성된 사진 목록")
-
-
-# ======================
-# Analysis Result Schemas
-# ======================
-
-
-class MenuCandidate(BaseModel):
-    """메뉴 후보"""
-
-    name: str = Field(..., description="메뉴명")
-    price: int | None = Field(None, description="가격", ge=0)
-    confidence: float | None = Field(None, description="신뢰도 (0~1)", ge=0, le=1)
 
 
 class PhotoAnalysisResultResponse(BaseModel):

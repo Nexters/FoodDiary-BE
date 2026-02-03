@@ -22,15 +22,10 @@ class Settings(BaseSettings):
     # External API Keys
     KAKAO_REST_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
-    OPENAI_API_KEY: str = ""
 
-    # Google OAuth 설정
-    GOOGLE_CLIENT_ID: str = ""  # 웹/백엔드용
-    GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
-
-    # 안드로이드 앱 클라이언트 ID (id_token 검증 시 허용)
-    GOOGLE_ANDROID_CLIENT_ID: str = ""
+    # Google OAuth 설정 (모바일 앱용)
+    GOOGLE_CLIENT_ID: str = ""  # 웹 클라이언트 ID (모바일에서도 사용)
+    GOOGLE_ANDROID_CLIENT_ID: str = ""  # 안드로이드 앱 클라이언트 ID
 
     # Firebase 설정 (모바일 앱용)
     FIREBASE_PROJECT_ID: str = ""
