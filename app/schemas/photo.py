@@ -124,7 +124,7 @@ class BatchUploadResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "created": [
+                "results": [
                     {
                         "photo_id": 101,
                         "diary_id": 12,
@@ -144,7 +144,7 @@ class BatchUploadResponse(BaseModel):
         }
     )
 
-    created: list[PhotoUploadResult] = Field(..., description="생성된 사진 목록")
+    results: list[PhotoUploadResult] = Field(..., description="업로드 및 분석 결과")
 
 
 class PhotoAnalysisResultResponse(BaseModel):

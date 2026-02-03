@@ -44,21 +44,6 @@ async def batch_upload_photos(
     6. GPS 기반 주변 식당 검색
 
     **응답 시간:** 약 5-10초 (사진 개수와 무관하게 병렬 처리)
-
-    **Request:**
-    - Content-Type: multipart/form-data
-    - date: 대상 날짜 (YYYY-MM-DD)
-    - photos[]: 이미지 파일들
-
-    **Response:**
-    ```json
-    {
-        "created": [
-            {"photo_id": 101, "diary_id": 12, "time_type": "lunch"},
-            {"photo_id": 102, "diary_id": 13, "time_type": "dinner"}
-        ]
-    }
-    ```
     """
     # 날짜 문자열을 date 객체로 변환
     try:
@@ -93,4 +78,4 @@ async def batch_upload_photos(
         files=photos,
     )
 
-    return BatchUploadResponse(created=results)
+    return BatchUploadResponse(results=results)
