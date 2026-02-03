@@ -234,8 +234,181 @@ Authorization: Bearer <token>
 4. 시간대 기준 끼니 분류
 5. Diary upsert (user + date + time_type)
 6. Photo insert
-7. 분석 작업 enqueue
+7. 분석 작업 (아래 두 가지 방식 중 선택)
 ```
+
+---
+
+### **🤖 분석 처리 아키텍처 (2가지 방식)**
+
+#### **1안: 동기 + 내부 병렬 처리 (권장 - MVP)**
+
+> 업로드 API에서 분석까지 전부 수행하되, LLM 호출을 병렬로 처리
+
+```
+┌─────────────┐     POST /photos/batch-upload      ┌─────────────┐
+│   Frontend  │ ─────────────────────────────────▶ │   Backend   │
+└─────────────┘                                    └─────────────┘
+                                                         │
+                                                         ▼
+                                                  ┌─────────────┐
+                                                  │ 1. 파일 저장 │
+                                                  │ 2. EXIF 파싱│
+                                                  │ 3. Diary 생성│
+                                                  └──────┬──────┘
+                                                         │
+                                          ┌──────────────┼──────────────┐
+                                          ▼              ▼              ▼
+                                     ┌────────┐    ┌────────┐    ┌────────┐
+                                     │Photo 1 │    │Photo 2 │    │Photo 3 │
+                                     │LLM 분석│    │LLM 분석│    │LLM 분석│
+                                     └────┬───┘    └────┬───┘    └────┬───┘
+                                          │             │             │
+                                          └──────────┬──┴─────────────┘
+                                                     │ asyncio.gather() 병렬 실행
+                                                     ▼
+                                              DiaryAnalysis 집계
+                                                     │
+       ◀─────────────────────────────────────────────┘
+       응답 (5-10초): 업로드 + 분석 결과 모두 포함
+```
+
+**장점:**
+
+- 구현 단순 (폴링 불필요)
+- 응답에 분석 결과까지 포함 가능
+- 프론트엔드 로직 단순
+
+**단점:**
+
+- 응답 대기 시간 5-10초 (사진 개수와 무관하게 병렬 처리)
+- 사진이 매우 많으면 타임아웃 위험
+
+**프론트 호출 흐름:**
+
+```
+1. POST /photos/batch-upload  ← 5-10초 대기 (로딩 스피너)
+2. 응답 받으면 바로 결과 화면 표시
+3. GET /diaries/{diary_id}/analysis  ← 후보 조회
+4. POST /diaries/{diary_id}/confirm  ← 확정
+```
+
+**서버 코드 예시:**
+
+```python
+import asyncio
+
+async def batch_upload_photos(...):
+    # 1단계: 파일 저장 + Diary 생성 (빠름)
+    photos = []
+    for file in files:
+        photo = await save_and_create_photo(file, ...)
+        photos.append(photo)
+
+    # 2단계: LLM 분석 병렬 실행 (느림 → 병렬로 해결)
+    await asyncio.gather(*[
+        analyze_photo(photo.id) for photo in photos
+    ])
+
+    return results
+```
+
+---
+
+#### **2안: 비동기 + 폴링 방식**
+
+> 업로드는 즉시 응답하고, 분석은 백그라운드에서 수행. 프론트에서 폴링으로 상태 확인
+
+```
+┌─────────────┐     POST /photos/batch-upload      ┌─────────────┐
+│   Frontend  │ ─────────────────────────────────▶ │   Backend   │
+└─────────────┘                                    └─────────────┘
+       │                                                 │
+       │         즉시 응답 (1-2초)                        │
+       ◀─────────────────────────────────────────────────┤
+       {created: [{photo_id, diary_id}]}                 │
+       │                                                 │
+       │                                          ┌──────▼──────┐
+       │                                          │ Background  │
+       │                                          │   Tasks     │
+       │                                          └──────┬──────┘
+       │                                                 │
+       │                                   ┌─────────────┼─────────────┐
+       │                                   ▼             ▼             ▼
+       │                              ┌────────┐   ┌────────┐   ┌────────┐
+       │                              │Photo 1 │   │Photo 2 │   │Photo 3 │
+       │                              │LLM 분석│   │LLM 분석│   │LLM 분석│
+       │                              └────────┘   └────────┘   └────────┘
+       │
+       │     GET /diaries/{date} (폴링)
+       │─────────────────────────────────────────────────▶
+       │
+       ◀─────────────────────────────────────────────────
+       analysis_status: "processing"
+       │
+       │     (2초 후 다시 폴링)
+       │─────────────────────────────────────────────────▶
+       │
+       ◀─────────────────────────────────────────────────
+       analysis_status: "done"  ← 분석 완료!
+```
+
+**장점:**
+
+- 업로드 응답이 즉시 (1-2초)
+- 타임아웃 위험 없음
+- 대용량 처리에 유리
+
+**단점:**
+
+- 프론트에서 폴링 로직 필요
+- 구현이 조금 더 복잡
+
+**프론트 호출 흐름:**
+
+```
+1. POST /photos/batch-upload  ← 즉시 응답
+2. 화면에 "분석 중..." 표시
+3. GET /diaries/{date} 폴링 (2초 간격)
+   - analysis_status: "processing" → 계속 폴링
+   - analysis_status: "done" → 폴링 중단
+4. GET /diaries/{diary_id}/analysis  ← 후보 조회
+5. POST /diaries/{diary_id}/confirm  ← 확정
+```
+
+**서버 코드 예시:**
+
+```python
+from fastapi import BackgroundTasks
+
+@router.post("/batch-upload")
+async def batch_upload_photos(
+    ...,
+    background_tasks: BackgroundTasks
+):
+    # 1단계: 파일 저장 + Diary 생성
+    photos = []
+    for file in files:
+        photo = await save_and_create_photo(file, ...)
+        photos.append(photo)
+
+    # 2단계: 백그라운드 작업 등록 (즉시 반환)
+    for photo in photos:
+        background_tasks.add_task(analyze_photo, photo.id)
+
+    return {"created": [...]}  # 즉시 응답
+```
+
+---
+
+### **🎯 권장 선택 기준**
+
+| 상황                       | 권장 방식               |
+| -------------------------- | ----------------------- |
+| MVP / 초기 개발            | **1안** (동기 + 병렬)   |
+| 사진 1-5장 업로드가 대부분 | **1안** (동기 + 병렬)   |
+| 10장 이상 대량 업로드      | **2안** (비동기 + 폴링) |
+| 서버 안정성 중요           | **2안** (비동기 + 폴링) |
 
 ---
 
