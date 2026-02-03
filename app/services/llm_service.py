@@ -3,6 +3,7 @@
 import json
 import logging
 
+import aiofiles
 import google.generativeai as genai
 
 from app.core.config import settings
@@ -31,8 +32,8 @@ async def analyze_food_image(image_path: str) -> dict:
 
     try:
         # 이미지 파일 로드
-        with open(image_path, "rb") as f:
-            image_data = f.read()
+        async with aiofiles.open(image_path, "rb") as f:
+            image_data = await f.read()
 
         # Gemini 모델 설정 (gemini-2.0-flash 사용)
         model = genai.GenerativeModel("gemini-2.0-flash")
@@ -40,7 +41,8 @@ async def analyze_food_image(image_path: str) -> dict:
         # 프롬프트 작성
         prompt = """이 음식 사진을 분석해서 다음 정보를 JSON 형식으로 추출해주세요:
 
-1. food_category: 음식 카테고리 (한식, 중식, 일식, 양식, 분식, 카페/디저트, 패스트푸드, 기타 중 하나)
+1. food_category: 음식 카테고리
+   (한식, 중식, 일식, 양식, 분식, 카페/디저트, 패스트푸드, 기타 중 하나)
 2. menus: 사진에 보이는 메뉴 이름들 (리스트)
 3. keywords: 이 음식을 설명하는 키워드들 (예: 매운맛, 건강식, 고단백 등) (리스트)
 

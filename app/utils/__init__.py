@@ -4,7 +4,7 @@ from app.utils.time_classifier import classify_time_type
 
 __all__ = [
     "ExifData",
-    "extract_exif_data",
     "classify_time_type",
+    "extract_exif_data",
     "save_uploaded_file",
 ]

@@ -21,6 +21,9 @@ Pillow>=10.4.0
 # AI/LLM
 google-generativeai>=0.8.6
 
+# Async File I/O
+aiofiles>=24.1.0
+
 # Development
 python-dotenv==1.0.1
 black==24.10.0
