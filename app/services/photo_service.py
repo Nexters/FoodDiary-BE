@@ -12,11 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Photo
 from app.models import PhotoAnalysisResult as PhotoAnalysisResultModel
 from app.schemas.diary import RestaurantCandidate
-from app.schemas.photo import (
-    MenuCandidate,
-    PhotoAnalysisResult,
-    PhotoUploadResult,
-)
+from app.schemas.photo import MenuCandidate, PhotoAnalysisResult, PhotoUploadResult
 from app.services.analysis_service import (
     AnalysisData,
     aggregate_photo_analysis_to_diary,
