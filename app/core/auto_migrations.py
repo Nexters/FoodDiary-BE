@@ -7,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 
-async def _parse_init_sql_tables(sql_content: str) -> dict[str, dict]:
+def _parse_init_sql_tables(sql_content: str) -> dict[str, dict]:
     """
     init-db.sql에서 테이블 정의 파싱
 
