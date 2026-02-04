@@ -1,23 +1,91 @@
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.core.security import create_access_token
 from app.schemas.auth import LoginRequest, LoginResponse, VerifyResponse
 from app.services.auth import (
     TokenVerificationError,
-    exchange_google_code_for_user_info,
-    get_google_oauth_url,
     process_oauth_login,
     verify_oauth_token,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+# ==============================================
+# 개발용 테스트 로그인 (DEBUG 모드에서만 사용)
+# ==============================================
+
+
+class DevLoginRequest(BaseModel):
+    """개발용 로그인 요청"""
+
+    email: str = "test@example.com"
+
+
+@router.post(
+    "/dev/login",
+    response_model=LoginResponse,
+    summary="[개발용] 테스트 로그인",
+    description="DEBUG 모드에서만 사용 가능한 테스트 로그인 API입니다.",
+)
+async def dev_login(
+    request: DevLoginRequest,
+    session: AsyncSession = Depends(get_session),
+) -> LoginResponse:
+    """
+    개발/테스트용 간편 로그인
+
+    DEBUG=true 환경에서만 작동합니다.
+    실제 OAuth 인증 없이 테스트 유저로 로그인합니다.
+
+    Request:
+    - email: 테스트 유저 이메일 (기본값: test@example.com)
+
+    Returns:
+    - id: 생성된 사용자 UUID
+    - access_token: JWT 토큰
+    - is_first: 첫 로그인 여부
+    """
+    if not settings.DEBUG:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="개발 모드에서만 사용 가능합니다. DEBUG=true 설정이 필요합니다.",
+        )
+
+    # 테스트 유저 생성/조회
+    provider_user_id = f"dev_{request.email}"
+
+    try:
+        user, is_first = await process_oauth_login(
+            session,
+            provider="dev",
+            provider_user_id=provider_user_id,
+            email=request.email,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"테스트 유저 생성 실패: {e}",
+        ) from e
+
+    # JWT 토큰 발급
+    access_token = create_access_token(
+        user_id=str(user.id),
+        provider="dev",
+    )
+
+    return LoginResponse(
+        id=user.id,
+        access_token=access_token,
+        is_first=is_first,
+    )
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -136,79 +204,3 @@ async def verify_token(
             - "토큰 형식이 올바르지 않습니다": JWT 페이로드가 잘못됨
     """
     return VerifyResponse(message="유효한 토큰입니다")
-
-
-# ==============================================
-# 웹 OAuth 엔드포인트 (서버 테스트용)
-# ==============================================
-
-
-@router.get("/google/login", include_in_schema=True)
-async def google_web_login(
-    state: str | None = None,
-) -> RedirectResponse:
-    """
-    Google OAuth 웹 로그인 (서버 테스트용)
-
-    브라우저에서 이 URL을 열면 Google 로그인 페이지로 리다이렉트됩니다.
-    로그인 후 /auth/google/callback으로 돌아옵니다.
-
-    Note: 안드로이드/iOS는 /auth/login (POST)를 사용하세요.
-    """
-    oauth_url = get_google_oauth_url(state)
-    return RedirectResponse(url=oauth_url)
-
-
-@router.get("/google/callback", response_model=LoginResponse)
-async def google_web_callback(
-    code: Annotated[str, Query(description="Google에서 받은 authorization code")],
-    session: AsyncSession = Depends(get_session),
-) -> LoginResponse:
-    """
-    Google OAuth 콜백 처리 (서버 테스트용)
-
-    Google 로그인 성공 후 자동으로 호출되는 엔드포인트입니다.
-    모바일 /auth/login과 동일한 로직을 사용합니다.
-
-    Process:
-    1. Authorization code → 사용자 정보 조회
-    2. 첫 로그인 시 사용자 생성 (모바일과 동일)
-    3. JWT access token 발급 (모바일과 동일)
-
-    Returns:
-        모바일과 동일한 LoginResponse
-    """
-    # 1. Google code → 사용자 정보 조회
-    try:
-        provider_user_id, email = await exchange_google_code_for_user_info(code)
-    except TokenVerificationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Google 인증에 실패했습니다. 다시 시도해 주세요.",
-        ) from e
-
-    # 2. 로그인 처리 (모바일과 동일한 함수 사용!)
-    try:
-        user, is_first = await process_oauth_login(
-            session,
-            "google",
-            provider_user_id,
-            email,
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
-        ) from e
-
-    # 3. Access token 생성 (모바일과 동일!)
-    access_token = create_access_token(
-        user_id=str(user.id),
-        provider="google",
-    )
-
-    return LoginResponse(
-        id=user.id,
-        access_token=access_token,
-        is_first=is_first,
-    )

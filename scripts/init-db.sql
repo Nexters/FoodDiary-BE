@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS photos (
     diary_id INTEGER NOT NULL REFERENCES diaries(id) ON DELETE CASCADE,
     image_url TEXT NOT NULL,
     taken_at TIMESTAMP,
-    taken_location POINT,
+    taken_location VARCHAR(100),  -- "latitude,longitude" 형식 (예: "37.5186,126.9305")
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
