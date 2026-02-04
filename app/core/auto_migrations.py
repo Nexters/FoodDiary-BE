@@ -216,7 +216,7 @@ async def generate_schema_diff(conn: AsyncConnection) -> list[str]:
     try:
         # 1. init-db.sql 로드 및 파싱
         init_sql = await _load_init_sql()
-        target_schema = await _parse_init_sql_tables(init_sql)
+        target_schema = _parse_init_sql_tables(init_sql)
 
         # 2. 현재 DB 스키마 조회
         current_schema = await _get_current_schema(conn)
