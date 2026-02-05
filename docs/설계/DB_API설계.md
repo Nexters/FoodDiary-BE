@@ -645,19 +645,21 @@ async def batch_upload_photos(db, user_id, target_date, files):
 - 프론트에서 폴링 로직 필요
 - 구현이 조금 더 복잡
 
-**프론트 호출 흐름:**
+**프론트 호출 흐름 (2안 적용 시):**
+
+> ⚠️ 아래는 **미구현된 2안**의 흐름입니다. 현재 1안에서는 폴링이 필요 없습니다.
 
 ```
-1. POST /photos/batch-upload  ← 즉시 응답
+1. POST /photos/batch-upload  ← 즉시 응답 (분석은 백그라운드)
 2. 화면에 "분석 중..." 표시
-3. GET /diaries/{date} 폴링 (2초 간격)
+3. GET /diaries?date=... 폴링 (2초 간격)  ← 백그라운드 분석 완료 여부 확인
    - analysis_status: "processing" → 계속 폴링
    - analysis_status: "done" → 폴링 중단
 4. GET /diaries/{diary_id}/analysis  ← 후보 조회
 5. POST /diaries/{diary_id}/confirm  ← 확정
 ```
 
-**서버 코드 예시:**
+**서버 코드 예시 (2안):**
 
 ```python
 from fastapi import BackgroundTasks
@@ -769,13 +771,33 @@ async def aggregate_photo_analysis_to_diary(db, diary_id):
 
 ## **📆 3. 다이어리 조회 (프론트 메인 API)**
 
-### **GET /diaries/{date}**
+### **GET /diaries**
+
+> 하루 또는 기간 단위로 다이어리 목록 조회. Query Parameter로 조회 범위 지정.
+
+**Query Parameters**
+
+| **파라미터** | **타입** | **필수** | **설명**                                                          |
+| ------------ | -------- | -------- | ----------------------------------------------------------------- |
+| date         | string   | 조건부   | 특정 날짜 조회 (YYYY-MM-DD). start_date/end_date와 함께 사용 불가 |
+| start_date   | string   | 조건부   | 시작 날짜 (YYYY-MM-DD). end_date와 함께 사용                      |
+| end_date     | string   | 조건부   | 종료 날짜 (YYYY-MM-DD). start_date와 함께 사용                    |
+
+> ⚠️ `date` 또는 `start_date + end_date` 중 하나는 필수. 둘 다 없거나 둘 다 있으면 400 에러.
+
+---
+
+#### **예시 1: 하루 조회**
 
 ```
+GET /diaries?date=2026-01-19
+```
+
+```json
 {
-    "date": "2026-01-19",
+  "2026-01-19": {
     "diaries": [
-    {
+      {
         "diary_id": 12,
         "time_type": "lunch",
         "analysis_status": "processing",
@@ -783,16 +805,98 @@ async def aggregate_photo_analysis_to_diary(db, diary_id):
         "category": null,
         "cover_photo_url": "...",
         "photos": [
-        {
+          {
             "photo_id": 101,
             "image_url": "...",
             "analysis_status": "done"
-        }
+          }
         ]
-    }
+      }
     ]
+  }
 }
 ```
+
+---
+
+#### **예시 2: 일주일 조회**
+
+```
+GET /diaries?start_date=2026-01-13&end_date=2026-01-19
+```
+
+```json
+{
+    "2026-01-13": {
+        "diaries": [
+            {
+                "diary_id": 8,
+                "time_type": "lunch",
+                "analysis_status": "done",
+                "restaurant_name": "명동교자",
+                "category": "한식",
+                "cover_photo_url": "...",
+                "photos": [...]
+            },
+            {
+                "diary_id": 9,
+                "time_type": "dinner",
+                "analysis_status": "done",
+                "restaurant_name": "스시히로바",
+                "category": "일식",
+                "cover_photo_url": "...",
+                "photos": [...]
+            }
+        ]
+    },
+    "2026-01-14": {
+        "diaries": []
+    },
+    "2026-01-15": {
+        "diaries": [
+            {
+                "diary_id": 10,
+                "time_type": "breakfast",
+                "analysis_status": "done",
+                "restaurant_name": "투썸플레이스",
+                "category": "카페",
+                "cover_photo_url": "...",
+                "photos": [...]
+            }
+        ]
+    },
+    "2026-01-16": {
+        "diaries": []
+    },
+    "2026-01-17": {
+        "diaries": []
+    },
+    "2026-01-18": {
+        "diaries": []
+    },
+    "2026-01-19": {
+        "diaries": [
+            {
+                "diary_id": 12,
+                "time_type": "lunch",
+                "analysis_status": "processing",
+                "restaurant_name": null,
+                "category": null,
+                "cover_photo_url": "...",
+                "photos": [...]
+            }
+        ]
+    }
+}
+```
+
+> 📌 **응답 구조 설명**
+>
+> - 날짜별로 그룹핑된 딕셔너리 형태
+> - 다이어리가 없는 날짜도 빈 배열로 포함 (프론트에서 "기록 없음" UI 처리 용이)
+> - 기간 조회 시 최대 31일로 제한 권장 (성능 보장)
+
+````
 
 ---
 
@@ -810,7 +914,7 @@ async def aggregate_photo_analysis_to_diary(db, diary_id):
     "category_candidates": ["한식"],
     "menu_candidates": ["칼국수", "만두"]
 }
-```
+````
 
 ## **📆 5. 다이어리 확정 (유저 선택 저장)**
 
@@ -833,10 +937,11 @@ async def aggregate_photo_analysis_to_diary(db, diary_id):
 
 ```jsx
 1. 로그인
-2. 사진 여러 장 선택
-3. POST /photos/batch-upload
-4. GET /diaries/{date}  ← 화면 렌더
-5. (필요시) GET /diaries/{diary_id}/analysis
-6. POST /diaries/{diary_id}/confirm
-7. GET /diaries/{date}  ← 갱신
+2. 메인 화면 진입 → GET /diaries?start_date=...&end_date=...  ← 일주일 조회
+3. 사진 여러 장 선택
+4. POST /photos/batch-upload
+5. GET /diaries?date=...  ← 해당 날짜 다이어리 갱신
+6. (필요시) GET /diaries/{diary_id}/analysis
+7. POST /diaries/{diary_id}/confirm
+8. GET /diaries?date=...  ← 확정 후 갱신
 ```
