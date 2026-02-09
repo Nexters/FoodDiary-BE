@@ -119,6 +119,29 @@ CREATE INDEX IF NOT EXISTS idx_photo_analysis_photo_id
     ON photo_analysis_results(photo_id);
 
 -- ======================
+-- Devices 테이블
+-- ======================
+-- 푸시 알림을 위한 디바이스 정보
+CREATE TABLE IF NOT EXISTS devices (
+    id SERIAL PRIMARY KEY,
+    device_id VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    device_token VARCHAR(255),
+    app_version VARCHAR(20) NOT NULL,
+    os_version VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
+);
+
+-- Devices 테이블 인덱스
+CREATE INDEX IF NOT EXISTS idx_device_device_id
+    ON devices(device_id);
+CREATE INDEX IF NOT EXISTS idx_device_user_id
+    ON devices(user_id);
+
+-- ======================
 -- Foreign Key 업데이트
 -- ======================
 -- diaries 테이블의 cover_photo_id에 대한 외래 키 제약 조건 추가
@@ -156,9 +179,14 @@ CREATE TRIGGER update_photos_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_photo_analysis_results_updated_at 
-    BEFORE UPDATE ON photo_analysis_results 
-    FOR EACH ROW 
+CREATE TRIGGER update_photo_analysis_results_updated_at
+    BEFORE UPDATE ON photo_analysis_results
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_devices_updated_at
+    BEFORE UPDATE ON devices
+    FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 
@@ -174,5 +202,6 @@ BEGIN
     RAISE NOTICE '  - diary_analysis';
     RAISE NOTICE '  - photos';
     RAISE NOTICE '  - photo_analysis_results';
+    RAISE NOTICE '  - devices';
     RAISE NOTICE '==============================================';
 END $$;

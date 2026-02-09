@@ -14,6 +14,7 @@ from app.services.auth import (
     process_oauth_login,
     verify_oauth_token,
 )
+from app.services.device import upsert_device
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -27,6 +28,10 @@ class DevLoginRequest(BaseModel):
     """개발용 로그인 요청"""
 
     email: str = "test@example.com"
+    device_id: str = "dev-device-001"
+    device_token: str | None = None
+    app_version: str = "0.0.0"
+    os_version: str = "0.0.0"
 
 
 @router.post(
@@ -74,6 +79,16 @@ async def dev_login(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"테스트 유저 생성 실패: {e}",
         ) from e
+
+    # Device 등록/업데이트
+    await upsert_device(
+        session,
+        user_id=user.id,
+        device_id=request.device_id,
+        device_token=request.device_token,
+        app_version=request.app_version,
+        os_version=request.os_version,
+    )
 
     # JWT 토큰 발급
     access_token = create_access_token(
@@ -132,7 +147,17 @@ async def login(
             detail="로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
         ) from e
 
-    # 3. Access token 생성
+    # 3. Device 등록/업데이트
+    await upsert_device(
+        session,
+        user_id=user.id,
+        device_id=request.device_id,
+        device_token=request.device_token,
+        app_version=request.app_version,
+        os_version=request.os_version,
+    )
+
+    # 4. Access token 생성
     access_token = create_access_token(
         user_id=str(user.id),
         provider=request.provider.value,
