@@ -1,16 +1,6 @@
 import os
 
-import pytest
-import pytest_asyncio
 from dotenv import load_dotenv
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from testcontainers.postgres import PostgresContainer
 
 # .env 파일 로드 (TEST_FCM_TOKEN 등을 위해)
 load_dotenv()
@@ -18,12 +8,23 @@ load_dotenv()
 # database.py import 전에 환경변수 설정 (모듈 레벨 엔진 생성을 위해 필요)
 os.environ.setdefault("DATABASE_URL", "postgresql://dummy:dummy@localhost/dummy")
 
-from app.core.config import Settings
-from app.core.database import get_session
-from app.main import app
-from app.models.base import Base
-from app.services.auth import TokenVerificationError
-from app.services.fcm_sender import initialize_firebase
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from testcontainers.postgres import PostgresContainer  # noqa: E402
+
+from app.core.config import Settings  # noqa: E402
+from app.core.database import get_session  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.base import Base  # noqa: E402
+from app.services.auth import TokenVerificationError  # noqa: E402
+from app.services.fcm_sender import initialize_firebase  # noqa: E402
 
 
 # Firebase 초기화 (테스트 시작 시 한 번만)

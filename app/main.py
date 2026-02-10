@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import create_tables
-from app.services.fcm_sender import initialize_firebase
 from app.routers import (
     auth_router,
     device_router,
@@ -13,6 +12,7 @@ from app.routers import (
     insights_router,
     photos_router,
 )
+from app.services.fcm_sender import initialize_firebase
 
 
 @asynccontextmanager

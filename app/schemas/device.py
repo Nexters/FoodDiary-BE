@@ -19,7 +19,9 @@ class DeviceUpsertRequest(BaseModel):
     )
 
     device_id: str = Field(..., max_length=255, description="디바이스 고유 ID")
-    device_token: str | None = Field(None, max_length=255, description="푸시 알림 토큰 (선택)")
+    device_token: str | None = Field(
+        None, max_length=255, description="푸시 알림 토큰 (선택)"
+    )
     app_version: str = Field(..., max_length=20, description="앱 버전")
     os_version: str = Field(..., max_length=20, description="OS 버전")
     is_active: bool = Field(False, description="알림 권한 허용 여부")

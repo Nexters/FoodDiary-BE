@@ -172,9 +172,7 @@ async def test_register_device_creates_new(
     test_db_session.add(user)
     await test_db_session.commit()
 
-    token = create_access_token(
-        user_id=str(user.id), provider="apple"
-    )
+    token = create_access_token(user_id=str(user.id), provider="apple")
 
     # When: Device 등록
     response = await test_client.post(
@@ -216,9 +214,7 @@ async def test_register_device_upsert_existing(
     test_db_session.add(user)
     await test_db_session.commit()
 
-    token = create_access_token(
-        user_id=str(user.id), provider="apple"
-    )
+    token = create_access_token(user_id=str(user.id), provider="apple")
     headers = {"Authorization": f"Bearer {token}"}
 
     # 첫 번째 등록
@@ -351,9 +347,7 @@ async def test_dev_login_creates_device(
 
     # Device가 DB에 생성되었는지 확인
     result = await test_db_session.execute(
-        select(Device).where(
-            Device.device_id == "dev-login-device"
-        )
+        select(Device).where(Device.device_id == "dev-login-device")
     )
     device = result.scalars().first()
     assert device is not None

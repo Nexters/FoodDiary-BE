@@ -61,6 +61,52 @@ def send_notification(
         return False
 
 
+def send_silent_push(token: str, data: object) -> bool:
+    """FCM 토큰으로 Silent Push (data-only) 전송.
+
+    사용자에게 알림을 표시하지 않고 백그라운드로 데이터만 전송합니다.
+    앱이 백그라운드에서 데이터를 받아 처리할 수 있습니다.
+
+    Args:
+        token: FCM 디바이스 토큰
+        data: 전송할 데이터 페이로드 (어떤 객체든 허용)
+
+    Returns:
+        전송 성공 여부
+    """
+    if not token:
+        logger.warning("FCM 토큰 없음")
+        return False
+
+    if data is None:
+        logger.warning("Silent push에는 data 필수")
+        return False
+
+    fcm_data = _serialize_data(data)
+
+    message = messaging.Message(
+        data=fcm_data,
+        token=token,
+    )
+
+    try:
+        messaging.send(message)
+        logger.info("FCM Silent Push 전송 성공")
+        return True
+    except messaging.UnregisteredError:
+        logger.warning("만료된 FCM 토큰: token=%s", token[:20])
+        return False
+    except messaging.SenderIdMismatchError:
+        logger.warning("Sender ID 불일치: token=%s", token[:20])
+        return False
+    except ValueError as e:
+        logger.error("잘못된 FCM 인자: error=%s", e)
+        return False
+    except Exception:
+        logger.exception("FCM Silent Push 전송 실패")
+        return False
+
+
 def _serialize_data(data: object) -> dict[str, str]:
     """임의 객체를 FCM data payload(dict[str, str])로 변환."""
     if isinstance(data, dict):

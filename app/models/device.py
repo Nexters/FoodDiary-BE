@@ -35,6 +35,4 @@ class Device(Base, TimestampMixin):
     user: Mapped["User"] = relationship("User", back_populates="devices")
 
     def __repr__(self) -> str:
-        return (
-            f"<Device(id={self.id}, device_id={self.device_id})>"
-        )
+        return f"<Device(id={self.id}, device_id={self.device_id})>"
