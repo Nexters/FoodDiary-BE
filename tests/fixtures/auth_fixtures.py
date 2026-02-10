@@ -27,6 +27,7 @@ def create_login_request_payload(
     device_token: str | None = "test-fcm-token",
     app_version: str = "1.0.0",
     os_version: str = "18.0",
+    is_active: bool = False,
 ):
     """LoginRequest payload 팩토리"""
     return {
@@ -36,4 +37,5 @@ def create_login_request_payload(
         "device_token": device_token,
         "app_version": app_version,
         "os_version": os_version,
+        "is_active": is_active,
     }

@@ -13,6 +13,7 @@ async def upsert_device(
     device_token: str | None,
     app_version: str,
     os_version: str,
+    is_active: bool,
 ) -> Device:
     """
     Device 정보를 upsert 처리
@@ -28,6 +29,7 @@ async def upsert_device(
         device_token: 푸시 알림 토큰
         app_version: 앱 버전
         os_version: OS 버전
+        is_active: 활성 여부
 
     Returns:
         생성 또는 업데이트된 Device
@@ -36,11 +38,11 @@ async def upsert_device(
 
     if device:
         return await _update_device(
-            session, device, user_id, device_token, app_version, os_version
+            session, device, user_id, device_token, app_version, os_version, is_active
         )
 
     return await _create_device(
-        session, user_id, device_id, device_token, app_version, os_version
+        session, user_id, device_id, device_token, app_version, os_version, is_active
     )
 
 
@@ -64,12 +66,13 @@ async def _update_device(
     device_token: str | None,
     app_version: str,
     os_version: str,
+    is_active: bool,
 ) -> Device:
     device.user_id = user_id
     device.device_token = device_token
     device.app_version = app_version
     device.os_version = os_version
-    device.is_active = True
+    device.is_active = is_active
     await session.commit()
     await session.refresh(device)
     return device
@@ -82,6 +85,7 @@ async def _create_device(
     device_token: str | None,
     app_version: str,
     os_version: str,
+    is_active: bool,
 ) -> Device:
     device = Device(
         device_id=device_id,
@@ -89,6 +93,7 @@ async def _create_device(
         device_token=device_token,
         app_version=app_version,
         os_version=os_version,
+        is_active=is_active,
     )
     session.add(device)
     await session.commit()

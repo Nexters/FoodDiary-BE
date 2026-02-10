@@ -37,6 +37,7 @@ async def test_upsert_device_creates_new_device(test_db_session):
         device_token="fcm-token-xyz",
         app_version="1.0.0",
         os_version="18.2",
+        is_active=True,
     )
 
     # Then: Device 생성 확인
@@ -72,6 +73,7 @@ async def test_upsert_device_updates_existing_device(test_db_session):
         device_token="old-token",
         app_version="1.0.0",
         os_version="17.0",
+        is_active=True,
     )
     original_id = device.id
 
@@ -83,6 +85,7 @@ async def test_upsert_device_updates_existing_device(test_db_session):
         device_token="new-token",
         app_version="1.1.0",
         os_version="18.0",
+        is_active=True,
     )
 
     # Then: 기존 레코드 업데이트, 새 레코드 생성되지 않음
@@ -126,6 +129,7 @@ async def test_upsert_device_changes_user(test_db_session):
         device_token="token-v1",
         app_version="1.0.0",
         os_version="18.0",
+        is_active=True,
     )
 
     # When: 같은 기기에서 user2로 로그인 (소유자 변경)
@@ -136,6 +140,7 @@ async def test_upsert_device_changes_user(test_db_session):
         device_token="token-v2",
         app_version="1.0.0",
         os_version="18.0",
+        is_active=True,
     )
 
     # Then: user_id가 user2로 변경
@@ -179,6 +184,7 @@ async def test_register_device_creates_new(
             "device_token": "fcm-new-token",
             "app_version": "2.0.0",
             "os_version": "18.2",
+            "is_active": True,
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -223,6 +229,7 @@ async def test_register_device_upsert_existing(
             "device_token": "old-token",
             "app_version": "1.0.0",
             "os_version": "17.0",
+            "is_active": True,
         },
         headers=headers,
     )
@@ -235,6 +242,7 @@ async def test_register_device_upsert_existing(
             "device_token": "updated-token",
             "app_version": "1.1.0",
             "os_version": "18.0",
+            "is_active": True,
         },
         headers=headers,
     )
@@ -266,6 +274,7 @@ async def test_register_device_requires_auth(test_client):
             "device_token": "token",
             "app_version": "1.0.0",
             "os_version": "18.0",
+            "is_active": False,
         },
     )
     assert response.status_code == 403
@@ -286,12 +295,13 @@ async def test_login_creates_device(
     로그인 시 Device 자동 등록 테스트:
     - OAuth 로그인 성공 시 Device 레코드 생성
     """
-    # When: device 정보 포함하여 로그인
+    # When: device 정보 포함하여 로그인 (알림 권한 허용)
     payload = create_login_request_payload(
         device_id="login-device-001",
         device_token="login-fcm-token",
         app_version="1.0.0",
         os_version="18.0",
+        is_active=True,
     )
     response = await test_client.post("/auth/login", json=payload)
 
@@ -323,7 +333,7 @@ async def test_dev_login_creates_device(
     # Given: DEBUG=True 설정
     monkeypatch.setattr("app.routers.auth.settings.DEBUG", True)
 
-    # When: dev 로그인 (device 정보 포함)
+    # When: dev 로그인 (device 정보 포함, 알림 권한 미허용)
     response = await test_client.post(
         "/auth/dev/login",
         json={
@@ -332,6 +342,7 @@ async def test_dev_login_creates_device(
             "device_token": "dev-fcm-token",
             "app_version": "0.1.0",
             "os_version": "17.5",
+            "is_active": False,
         },
     )
 
@@ -349,3 +360,4 @@ async def test_dev_login_creates_device(
     assert device.device_token == "dev-fcm-token"
     assert device.app_version == "0.1.0"
     assert device.os_version == "17.5"
+    assert device.is_active is False

@@ -13,14 +13,16 @@ class DeviceUpsertRequest(BaseModel):
                 "device_token": "fcm_token_abc123...",
                 "app_version": "1.0.0",
                 "os_version": "18.2",
+                "is_active": True,
             }
         }
     )
 
     device_id: str = Field(..., max_length=255, description="디바이스 고유 ID")
-    device_token: str | None = Field(None, max_length=255, description="푸시 알림 토큰")
+    device_token: str | None = Field(None, max_length=255, description="푸시 알림 토큰 (선택)")
     app_version: str = Field(..., max_length=20, description="앱 버전")
     os_version: str = Field(..., max_length=20, description="OS 버전")
+    is_active: bool = Field(False, description="알림 권한 허용 여부")
 
 
 class DeviceResponse(BaseModel):

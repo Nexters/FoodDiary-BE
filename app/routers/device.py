@@ -34,5 +34,6 @@ async def register_device(
         device_token=request.device_token,
         app_version=request.app_version,
         os_version=request.os_version,
+        is_active=request.is_active,
     )
     return DeviceResponse.model_validate(device)

@@ -32,6 +32,7 @@ class DevLoginRequest(BaseModel):
     device_token: str | None = None
     app_version: str = "0.0.0"
     os_version: str = "0.0.0"
+    is_active: bool = False
 
 
 @router.post(
@@ -88,6 +89,7 @@ async def dev_login(
         device_token=request.device_token,
         app_version=request.app_version,
         os_version=request.os_version,
+        is_active=request.is_active,
     )
 
     # JWT 토큰 발급
@@ -155,6 +157,7 @@ async def login(
         device_token=request.device_token,
         app_version=request.app_version,
         os_version=request.os_version,
+        is_active=request.is_active,
     )
 
     # 4. Access token 생성
