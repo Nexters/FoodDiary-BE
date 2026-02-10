@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import create_tables
+from app.services.fcm_sender import initialize_firebase
 from app.routers import (
     auth_router,
     device_router,
@@ -16,8 +17,9 @@ from app.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """애플리케이션 시작 시 테이블 생성"""
+    """애플리케이션 시작 시 초기화"""
     await create_tables()
+    initialize_firebase()
     yield
 
 

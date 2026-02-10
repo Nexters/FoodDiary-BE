@@ -2,6 +2,7 @@ import os
 
 import pytest
 import pytest_asyncio
+from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -11,6 +12,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from testcontainers.postgres import PostgresContainer
 
+# .env 파일 로드 (TEST_FCM_TOKEN 등을 위해)
+load_dotenv()
+
 # database.py import 전에 환경변수 설정 (모듈 레벨 엔진 생성을 위해 필요)
 os.environ.setdefault("DATABASE_URL", "postgresql://dummy:dummy@localhost/dummy")
 
@@ -19,6 +23,15 @@ from app.core.database import get_session
 from app.main import app
 from app.models.base import Base
 from app.services.auth import TokenVerificationError
+from app.services.fcm_sender import initialize_firebase
+
+
+# Firebase 초기화 (테스트 시작 시 한 번만)
+@pytest.fixture(scope="session", autouse=True)
+def initialize_firebase_for_tests():
+    """테스트 세션 시작 시 Firebase 초기화"""
+    initialize_firebase()
+    yield
 
 
 @pytest.fixture(scope="session")
