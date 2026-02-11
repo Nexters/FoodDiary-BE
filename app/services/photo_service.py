@@ -50,9 +50,9 @@ async def batch_upload_photos(
     Returns:
         list[PhotoUploadResult]: 업로드 결과 목록
     """
-    photo_infos: list[
-        tuple[Photo, int, str]
-    ] = []  # [(photo, diary_id, time_type), ...]
+    photo_infos: list[tuple[Photo, int, str]] = (
+        []
+    )  # [(photo, diary_id, time_type), ...]
 
     # ========================================
     # 1단계: 파일 저장 + DB 저장 (순차 처리)
