@@ -21,7 +21,7 @@ from app.services.analysis_service import (
 )
 from app.services.diary_service import get_or_create_diary
 from app.utils.exif_parser import extract_exif_data
-from app.utils.file_storage import save_uploaded_file
+from app.utils.file_storage import save_user_photo
 from app.utils.time_classifier import classify_time_type
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,9 @@ async def batch_upload_photos(
     Returns:
         list[PhotoUploadResult]: 업로드 결과 목록
     """
-    photo_infos: list[tuple[Photo, int, str]] = (
-        []
-    )  # [(photo, diary_id, time_type), ...]
+    photo_infos: list[
+        tuple[Photo, int, str]
+    ] = []  # [(photo, diary_id, time_type), ...]
 
     # ========================================
     # 1단계: 파일 저장 + DB 저장 (순차 처리)
@@ -70,7 +70,7 @@ async def batch_upload_photos(
             diary = await get_or_create_diary(db, user_id, target_date, time_type)
 
             # 4. 파일 저장
-            image_url = await save_uploaded_file(file)
+            image_url = await save_user_photo(user_id, file)
 
             # 5. Photo 생성
             taken_location = None

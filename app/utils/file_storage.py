@@ -5,34 +5,46 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
-UPLOAD_DIR = Path("data/photos")
+STORAGE_DIR = Path("storage/photos")
 
 
-async def save_uploaded_file(file: UploadFile) -> str:
+async def save_user_photo(user_id: int, file: UploadFile) -> str:
     """
-    업로드된 파일을 저장하고 URL을 반환합니다.
+    사용자별 디렉토리에 사진을 저장합니다.
 
     Args:
+        user_id: 사용자 ID
         file: FastAPI UploadFile 객체
 
     Returns:
-        str: 저장된 파일의 경로 (예: "data/photos/{uuid}.jpg")
+        str: 저장된 파일의 경로 (예: "storage/photos/{user_id}/{uuid}.jpg")
     """
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-    # 파일 확장자 추출
     filename = file.filename or "image.jpg"
     ext = Path(filename).suffix or ".jpg"
-
-    # UUID 기반 고유 파일명 생성
     new_filename = f"{uuid.uuid4()}{ext}"
-    filepath = UPLOAD_DIR / new_filename
 
-    # 파일 저장
+    user_dir = STORAGE_DIR / str(user_id)
+    filepath = user_dir / new_filename
+
     content = await file.read()
-    filepath.write_bytes(content)
-
-    # 파일 포인터 리셋 (다른 곳에서 다시 읽을 수 있도록)
     await file.seek(0)
 
-    return str(filepath)
+    return save_file(filepath, content)
+
+
+def save_file(filepath: Path | str, content: bytes) -> str:
+    """
+    파일을 지정된 경로에 저장합니다.
+
+    Args:
+        filepath: 저장할 파일의 전체 경로
+        content: 파일 내용
+
+    Returns:
+        str: 저장된 파일의 경로
+    """
+    path = Path(filepath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+
+    return str(path)
