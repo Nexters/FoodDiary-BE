@@ -1,14 +1,14 @@
 """파일 저장 유틸리티"""
 
-import uuid
 from pathlib import Path
+from uuid import UUID, uuid4
 
 from fastapi import UploadFile
 
 STORAGE_DIR = Path("storage/photos")
 
 
-async def save_user_photo(user_id: int, file: UploadFile) -> str:
+async def save_user_photo(user_id: UUID, file: UploadFile) -> str:
     """
     사용자별 디렉토리에 사진을 저장합니다.
 
@@ -21,7 +21,7 @@ async def save_user_photo(user_id: int, file: UploadFile) -> str:
     """
     filename = file.filename or "image.jpg"
     ext = Path(filename).suffix or ".jpg"
-    new_filename = f"{uuid.uuid4()}{ext}"
+    new_filename = f"{uuid4()}{ext}"
 
     user_dir = STORAGE_DIR / str(user_id)
     filepath = user_dir / new_filename
