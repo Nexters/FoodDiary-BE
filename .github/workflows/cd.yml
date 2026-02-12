@@ -54,6 +54,7 @@ jobs:
             # 새 컨테이너 실행 (민감한 환경변수만 주입)
             sudo docker run -d \
               --name fooddiary-api \
+              -v ${{ secrets.STORAGE_PATH }}:/app/storage \
               -p 8000:8000 \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               -e APPLE_CLIENT_ID="${{ secrets.APPLE_CLIENT_ID }}" \
@@ -63,5 +64,6 @@ jobs:
               -e GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
               -e GOOGLE_REDIRECT_URI="${{ secrets.GOOGLE_REDIRECT_URI }}" \
               -e FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
+              -e KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
               --restart unless-stopped \
               ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
