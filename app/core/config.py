@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     # Firebase 설정 (모바일 앱용)
     FIREBASE_PROJECT_ID: str = ""
+    FIREBASE_CREDENTIALS_JSON: str = ""  # Base64 인코딩된 서비스 계정 JSON
 
     # Apple OAuth Settings
     APPLE_CLIENT_ID: str = ""

@@ -21,12 +21,24 @@ class LoginRequest(BaseModel):
                 "id_token": (
                     "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFkZWFkYmVlZiIsInR5cCI6IkpXVCJ9..."
                 ),
+                "device_id": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+                "device_token": "fcm_token_abc123...",
+                "app_version": "1.0.0",
+                "os_version": "18.2",
+                "is_active": True,
             }
         }
     )
 
     provider: OAuthProvider = Field(..., description="OAuth provider (apple or google)")
     id_token: str = Field(..., min_length=1, description="OAuth provider의 ID 토큰")
+    device_id: str = Field(..., max_length=255, description="디바이스 고유 ID")
+    device_token: str | None = Field(
+        None, max_length=255, description="푸시 알림 토큰 (선택)"
+    )
+    app_version: str = Field(..., max_length=20, description="앱 버전")
+    os_version: str = Field(..., max_length=20, description="OS 버전")
+    is_active: bool = Field(False, description="알림 권한 허용 여부")
 
 
 class LoginResponse(BaseModel):

@@ -5,13 +5,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import create_tables
-from app.routers import auth_router, health_router, insights_router, photos_router
+from app.routers import (
+    auth_router,
+    device_router,
+    health_router,
+    insights_router,
+    photos_router,
+)
+from app.services.fcm_sender import initialize_firebase
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """애플리케이션 시작 시 테이블 생성"""
+    """애플리케이션 시작 시 초기화"""
     await create_tables()
+    initialize_firebase()
     yield
 
 
@@ -32,5 +40,6 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(device_router)
 app.include_router(insights_router)
 app.include_router(photos_router)

@@ -10,6 +10,7 @@ from app.models.base import Base
 from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.device import Device
     from app.models.diary import Diary
 
 
@@ -28,6 +29,7 @@ class User(Base, TimestampMixin):
 
     # Relationships
     diaries: Mapped[list["Diary"]] = relationship("Diary", back_populates="user")
+    devices: Mapped[list["Device"]] = relationship("Device", back_populates="user")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, provider={self.provider})>"
