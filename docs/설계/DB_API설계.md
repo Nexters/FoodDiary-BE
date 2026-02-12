@@ -1,21 +1,70 @@
-# **현재 서비스 플로우 요약 (분석 중심)**
+# **API 설계 변경사항 (2026-02-12)**
+
+## **주요 변경사항**
+
+### **1. 비동기 분석 처리 + FCM 푸시 도입**
+
+기존: 동기 방식 (5-10초 대기)
+→ 변경: 비동기 방식 (1-2초 즉시 응답 + FCM 푸시)
+
+### **2. Diary 테이블에 analysis_status 필드 추가**
+
+- `processing`: 분석 중
+- `done`: 분석 완료
+- `failed`: 분석 실패
+
+### **3. API 엔드포인트 변경**
+
+- `POST /photos/batch-upload`: 즉시 응답 (분석은 백그라운드)
+- `GET /diaries/{diary_id}`: 새로 추가 (다이어리 ID로 단일 조회)
+- `GET /diaries?date=...`: 기존 유지 (날짜 범위로 조회)
+
+### **4. 프론트 호출 흐름**
+
+```
+1. POST /photos/batch-upload (즉시 응답)
+2. 화면에 "분석 중..." 표시
+3. FCM 푸시 수신 (diary_id 포함)
+4. GET /diaries/{diary_id} 조회
+5. 분석 결과 표시
+```
+
+---
+
+# **현재 서비스 플로우 요약 (비동기 분석 + FCM 푸시)**
 
 ```
 1. 유저가 앱 실행
 2. 날짜 선택
 3. 사진 업로드 (여러 장 가능)
-4. 사진 여러장이 동시에 백엔드로 넘어감
-5. 사진을 시간대별로 분류해서 그룹을 만들어야함. 여기서 만들어진 그룹이 하나의 다이어리
-5. 사진마다 → 분석 API 호출
+4. POST /photos/batch-upload → 즉시 응답 (1-2초)
+   └─ 사진을 시간대별로 분류 (EXIF 기반)
+   └─ 시간대별 그룹 = 하나의 다이어리 (Diary 레코드 생성)
+   └─ analysis_status: "processing" 상태로 반환
 
-5. 분석 결과:
-    - 음식 카테고리
-    - 음식점 이름
-    - 주소
-    - 키워드
-    - 메뉴 이름
-6. 유저는 결과를 선택/확정
-7. 최종 결과 → 다이어리로 저장
+5. 백그라운드 분석 (비동기)
+   └─ 사진마다 LLM 분석 API 호출 (병렬)
+   └─ 분석 결과 DB 저장 (PhotoAnalysisResult)
+   └─ DiaryAnalysis 집계 (중복 제거)
+
+6. 분석 완료
+   └─ Diary.analysis_status = "done" 업데이트
+   └─ FCM 푸시 전송 (diary_id 포함)
+
+7. 프론트에서 FCM 수신
+   └─ GET /diaries/{diary_id} 호출
+   └─ 분석 결과 표시:
+       - 음식 카테고리
+       - 음식점 이름 (후보)
+       - 주소
+       - 키워드
+       - 메뉴 이름
+
+8. 유저는 결과를 선택/확정
+   └─ POST /diaries/{diary_id}/confirm
+
+9. 최종 확정
+   └─ Diary에 restaurant_name, category 저장
 ```
 
 ---
@@ -49,6 +98,7 @@
 | user_id         | 작성자                                                         |
 | diary_date      | 2024-01-17 형태                                                |
 | time_type       | 아침 / 점심 / 저녁 / 간식                                      |
+| analysis_status | processing(분석중) / done(완료) / failed(실패)                 |
 | restaurant_name | 유저가 최종 확정한 식당명                                      |
 | category        | 유저가 최종 확정한 음식 카테고리                               |
 | cover_photo_id  | 대표 썸네일 사진                                               |
@@ -199,7 +249,7 @@ Response:
 
 ### **POST /photos/batch-upload**
 
-📌 사진 여러 장을 **파일로 직접 업로드**하고 **AI 분석까지 완료**하여 반환
+📌 사진 여러 장을 **파일로 직접 업로드**하고 **즉시 응답**. AI 분석은 백그라운드에서 처리하며, 완료 시 FCM으로 알림
 
 ---
 
@@ -219,7 +269,7 @@ Authorization: Bearer <token>
 
 ---
 
-### **Response**
+### **Response (즉시 응답)**
 
 ```json
 {
@@ -229,45 +279,49 @@ Authorization: Bearer <token>
       "diary_id": 2,
       "time_type": "dinner",
       "image_url": "data/photos/22a85dba-9ad1-4c87-9fa8-26cd5aefe096.JPG",
-      "analysis": {
-        "food_category": "일식",
-        "restaurant_candidates": [
-          {
-            "name": "화목순대국",
-            "confidence": 0.8,
-            "address": "서울 영등포구 여의도동 44-14"
-          },
-          {
-            "name": "여수해물낙지",
-            "confidence": 0.8,
-            "address": "서울 영등포구 여의도동 45-19"
-          }
-        ],
-        "menu_candidates": [
-          { "name": "라멘", "price": null, "confidence": null }
-        ],
-        "keywords": ["국물", "따뜻한", "일본"]
-      }
+      "analysis_status": "processing"
     },
     {
       "photo_id": 20,
       "diary_id": 2,
       "time_type": "dinner",
       "image_url": "data/photos/abc123.JPG",
-      "analysis": {
-        "food_category": "한식",
-        "restaurant_candidates": [...],
-        "menu_candidates": [...],
-        "keywords": ["고기", "직화", "소스"]
-      }
+      "analysis_status": "processing"
     }
   ]
 }
 ```
 
+> 📌 **응답 특징**
+>
+> - 즉시 응답 (1-2초 이내)
+> - 파일 저장 및 Diary 생성만 완료된 상태
+> - `analysis_status: "processing"` - AI 분석은 백그라운드에서 진행 중
+
 ---
 
-### **🔧 서버 내부 처리 순서 (상세)**
+### **FCM 푸시 알림 (분석 완료 시)**
+
+분석이 완료되면 디바이스에 FCM 푸시를 전송:
+
+```json
+{
+  "notification": {
+    "title": "음식 일기 분석 완료",
+    "body": "새로운 다이어리를 확인해보세요!"
+  },
+  "data": {
+    "diary_id": "2",
+    "action": "diary_analysis_complete"
+  }
+}
+```
+
+> 프론트에서는 `diary_id`를 받아 `GET /diaries/{diary_id}`로 조회
+
+---
+
+### **🔧 서버 내부 처리 순서 (비동기 방식)**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -275,7 +329,7 @@ Authorization: Bearer <token>
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ╔═══════════════════════════════════════════════════════════════════════╗  │
-│  ║  1단계: 파일 저장 + DB 저장 (순차 처리)                                 ║  │
+│  ║  1단계: 파일 저장 + DB 저장 (순차 처리) → 즉시 응답                     ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                       ║  │
 │  ║   for each file in files:                                             ║  │
@@ -295,6 +349,7 @@ Authorization: Bearer <token>
 │  ║   │                                                                 │ ║  │
 │  ║   │ 3. Diary upsert                                                 │ ║  │
 │  ║   │    └─ (user_id + date + time_type) 기준으로 생성 또는 조회      │ ║  │
+│  ║   │    └─ analysis_status: "processing" 설정                        │ ║  │
 │  ║   │                                                                 │ ║  │
 │  ║   │ 4. 파일 저장                                                    │ ║  │
 │  ║   │    └─ data/photos/{uuid}.jpg                                    │ ║  │
@@ -302,11 +357,20 @@ Authorization: Bearer <token>
 │  ║   │ 5. Photo 레코드 생성                                            │ ║  │
 │  ║   │    └─ diary_id, image_url, taken_at, taken_location             │ ║  │
 │  ║   └─────────────────────────────────────────────────────────────────┘ ║  │
+│  ║                                                                       ║  │
+│  ║   6. 백그라운드 태스크 등록                                            ║  │
+│  ║      └─ analyze_photos_task(diary_id)                                 ║  │
+│  ║                                                                       ║  │
+│  ║   7. 즉시 응답 반환 (1-2초)                                           ║  │
+│  ║      └─ { photo_id, diary_id, image_url, analysis_status: "processing" } ║  │
 │  ╚═══════════════════════════════════════════════════════════════════════╝  │
-│                                    │                                        │
-│                                    ▼                                        │
+│                                                                             │
+│                           클라이언트로 즉시 응답 ▲                           │
+│  ═════════════════════════════════════════════════════════════════════════  │
+│                           여기서부터 백그라운드 처리 ▼                       │
+│                                                                             │
 │  ╔═══════════════════════════════════════════════════════════════════════╗  │
-│  ║  2단계: LLM 분석 (병렬 처리) - DB 접근 없이                            ║  │
+│  ║  2단계: LLM 분석 (병렬 처리) - 백그라운드                              ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                       ║  │
 │  ║   asyncio.gather() 로 모든 사진 동시 분석                             ║  │
@@ -329,7 +393,7 @@ Authorization: Bearer <token>
 │                                    │                                        │
 │                                    ▼                                        │
 │  ╔═══════════════════════════════════════════════════════════════════════╗  │
-│  ║  2-2단계: 분석 결과 DB 저장 (순차 처리)                                ║  │
+│  ║  3단계: 분석 결과 DB 저장 (순차 처리)                                  ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                       ║  │
 │  ║   for each result in analysis_results:                                ║  │
@@ -340,7 +404,7 @@ Authorization: Bearer <token>
 │                                    │                                        │
 │                                    ▼                                        │
 │  ╔═══════════════════════════════════════════════════════════════════════╗  │
-│  ║  3단계: DiaryAnalysis 집계                                             ║  │
+│  ║  4단계: DiaryAnalysis 집계                                             ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                       ║  │
 │  ║   같은 다이어리에 속한 모든 PhotoAnalysisResult를 집계                 ║  │
@@ -357,16 +421,14 @@ Authorization: Bearer <token>
 │                                    │                                        │
 │                                    ▼                                        │
 │  ╔═══════════════════════════════════════════════════════════════════════╗  │
-│  ║  4단계: 응답 반환                                                      ║  │
+│  ║  5단계: 상태 업데이트 + FCM 푸시                                       ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                       ║  │
-│  ║   각 Photo + 분석결과를 PhotoUploadResult로 변환하여 반환              ║  │
+│  ║   1. Diary.analysis_status = "done" 업데이트                          ║  │
+│  ║   2. FCM 푸시 전송                                                    ║  │
+│  ║      └─ { diary_id, action: "diary_analysis_complete" }               ║  │
 │  ║                                                                       ║  │
-│  ║   {                                                                   ║  │
-│  ║     "results": [                                                      ║  │
-│  ║       { photo_id, diary_id, time_type, image_url, analysis }          ║  │
-│  ║     ]                                                                 ║  │
-│  ║   }                                                                   ║  │
+│  ║   ※ 실패 시: analysis_status = "failed"                               ║  │
 │  ╚═══════════════════════════════════════════════════════════════════════╝  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -471,134 +533,9 @@ Authorization: Bearer <token>
 
 ---
 
-### **🤖 분석 처리 아키텍처 (2가지 방식)**
+### **🤖 분석 처리 아키텍처 (비동기 + FCM 푸시) ✅ 현재 설계**
 
-#### **1안: 동기 + 내부 병렬 처리 ✅ 현재 구현됨 (MVP)**
-
-> 업로드 API에서 분석까지 전부 수행하되, LLM 호출을 병렬로 처리
-
-```
-┌─────────────┐     POST /photos/batch-upload      ┌─────────────┐
-│   Frontend  │ ─────────────────────────────────▶ │   Backend   │
-└─────────────┘                                    └─────────────┘
-                                                         │
-                                                         ▼
-                                                  ┌─────────────┐
-                                                  │ 1. 파일 저장 │
-                                                  │ 2. EXIF 파싱│
-                                                  │ 3. Diary 생성│
-                                                  └──────┬──────┘
-                                                         │
-                                          ┌──────────────┼──────────────┐
-                                          ▼              ▼              ▼
-                                     ┌────────┐    ┌────────┐    ┌────────┐
-                                     │Photo 1 │    │Photo 2 │    │Photo 3 │
-                                     │LLM 분석│    │LLM 분석│    │LLM 분석│
-                                     │(Gemini)│    │(Gemini)│    │(Gemini)│
-                                     │Kakao   │    │Kakao   │    │Kakao   │
-                                     └────┬───┘    └────┬───┘    └────┬───┘
-                                          │             │             │
-                                          └──────────┬──┴─────────────┘
-                                                     │ asyncio.gather() 병렬 실행
-                                                     ▼
-                                          ┌─────────────────────┐
-                                          │ 분석 결과 DB 저장    │
-                                          │ (순차 - 충돌 방지)   │
-                                          └──────────┬──────────┘
-                                                     ▼
-                                              DiaryAnalysis 집계
-                                                     │
-       ◀─────────────────────────────────────────────┘
-       응답 (5-10초): 업로드 + 분석 결과 모두 포함
-```
-
-**장점:**
-
-- 구현 단순 (폴링 불필요)
-- 응답에 분석 결과까지 포함 가능
-- 프론트엔드 로직 단순
-
-**단점:**
-
-- 응답 대기 시간 5-10초 (사진 개수와 무관하게 병렬 처리)
-- 사진이 매우 많으면 타임아웃 위험 (30초 제한)
-
-**프론트 호출 흐름:**
-
-```
-1. POST /photos/batch-upload  ← 5-10초 대기 (로딩 스피너)
-2. 응답 받으면 바로 결과 화면 표시
-3. GET /diaries/{diary_id}/analysis  ← 후보 조회 (선택적)
-4. POST /diaries/{diary_id}/confirm  ← 확정
-```
-
-**실제 서버 코드:**
-
-```python
-# app/services/photo_service.py
-
-async def batch_upload_photos(db, user_id, target_date, files):
-    photo_infos = []
-
-    # ========================================
-    # 1단계: 파일 저장 + DB 저장 (순차 처리)
-    # ========================================
-    for file in files:
-        # 1. EXIF 파싱
-        exif_data = extract_exif_data(file.file)
-
-        # 2. 시간대 분류
-        time_type = classify_time_type(exif_data["taken_at"])
-
-        # 3. Diary upsert
-        diary = await get_or_create_diary(db, user_id, target_date, time_type)
-
-        # 4. 파일 저장
-        image_url = await save_uploaded_file(file)
-
-        # 5. Photo 생성
-        photo = Photo(diary_id=diary.id, image_url=image_url, ...)
-        db.add(photo)
-        await db.commit()
-
-        photo_infos.append((photo, diary.id, time_type))
-
-    # ========================================
-    # 2단계: LLM 분석 (병렬 처리) - DB 접근 없이
-    # ========================================
-    analysis_results = await asyncio.gather(
-        *[
-            analyze_photo_data(photo.image_url, photo.id, photo.taken_location)
-            for photo, _, _ in photo_infos
-        ],
-        return_exceptions=True,  # 개별 실패해도 전체 진행
-    )
-
-    # ========================================
-    # 2-2단계: 분석 결과 DB 저장 (순차 처리)
-    # ========================================
-    for result in analysis_results:
-        if isinstance(result, AnalysisData):
-            await save_photo_analysis(db, result)
-
-    # ========================================
-    # 3단계: DiaryAnalysis 집계
-    # ========================================
-    diary_ids = set(diary_id for _, diary_id, _ in photo_infos)
-    for diary_id in diary_ids:
-        await aggregate_photo_analysis_to_diary(db, diary_id)
-
-    # ========================================
-    # 4단계: 응답 반환
-    # ========================================
-    return [PhotoUploadResult(...) for ...]
-```
-
----
-
-#### **2안: 비동기 + 폴링 방식 (미구현 - 대용량 업로드 시 고려)**
-
-> 업로드는 즉시 응답하고, 분석은 백그라운드에서 수행. 프론트에서 폴링으로 상태 확인
+> 업로드는 즉시 응답하고, 분석은 백그라운드에서 수행. 완료 시 FCM으로 알림
 
 ```
 ┌─────────────┐     POST /photos/batch-upload      ┌─────────────┐
@@ -607,59 +544,74 @@ async def batch_upload_photos(db, user_id, target_date, files):
        │                                                 │
        │         즉시 응답 (1-2초)                        │
        ◀─────────────────────────────────────────────────┤
-       {created: [{photo_id, diary_id}]}                 │
+       {photo_id, diary_id, analysis_status: "processing"}
        │                                                 │
-       │                                          ┌──────▼──────┐
-       │                                          │ Background  │
-       │                                          │   Tasks     │
-       │                                          └──────┬──────┘
+       │                                          ┌──────▼──────────┐
+       │                                          │ Background      │
+       │                                          │ Analysis Task   │
+       │                                          └──────┬──────────┘
        │                                                 │
        │                                   ┌─────────────┼─────────────┐
        │                                   ▼             ▼             ▼
        │                              ┌────────┐   ┌────────┐   ┌────────┐
        │                              │Photo 1 │   │Photo 2 │   │Photo 3 │
        │                              │LLM 분석│   │LLM 분석│   │LLM 분석│
-       │                              └────────┘   └────────┘   └────────┘
+       │                              │(Gemini)│   │(Gemini)│   │(Gemini)│
+       │                              │Kakao   │   │Kakao   │   │Kakao   │
+       │                              └────┬───┘   └────┬───┘   └────┬───┘
+       │                                   │            │            │
+       │                                   └────────────┼────────────┘
+       │                                                │
+       │                                                ▼
+       │                                     ┌─────────────────────┐
+       │                                     │ DiaryAnalysis 집계   │
+       │                                     │ analysis_status:     │
+       │                                     │ "done" 업데이트      │
+       │                                     └──────────┬──────────┘
+       │                                                │
+       │     FCM 푸시 (분석 완료)                        │
+       ◀─────────────────────────────────────────────────┘
+       {diary_id: 2, action: "diary_analysis_complete"}
        │
-       │     GET /diaries/{date} (폴링)
+       │     GET /diaries/2  ← diary_id로 조회
        │─────────────────────────────────────────────────▶
        │
        ◀─────────────────────────────────────────────────
-       analysis_status: "processing"
-       │
-       │     (2초 후 다시 폴링)
-       │─────────────────────────────────────────────────▶
-       │
-       ◀─────────────────────────────────────────────────
-       analysis_status: "done"  ← 분석 완료!
+       {diary_id: 2, analysis_status: "done", ...}
 ```
 
 **장점:**
 
-- 업로드 응답이 즉시 (1-2초)
+- 즉시 응답 (1-2초) - 사용자 대기 시간 최소화
 - 타임아웃 위험 없음
-- 대용량 처리에 유리
+- FCM 푸시로 프론트에서 폴링 불필요
+- 대용량 업로드에 유리
 
 **단점:**
 
-- 프론트에서 폴링 로직 필요
-- 구현이 조금 더 복잡
+- FCM 인프라 필요
+- 백그라운드 태스크 관리 필요
 
-**프론트 호출 흐름 (2안 적용 시):**
-
-> ⚠️ 아래는 **미구현된 2안**의 흐름입니다. 현재 1안에서는 폴링이 필요 없습니다.
+**프론트 호출 흐름:**
 
 ```
-1. POST /photos/batch-upload  ← 즉시 응답 (분석은 백그라운드)
-2. 화면에 "분석 중..." 표시
-3. GET /diaries?date=... 폴링 (2초 간격)  ← 백그라운드 분석 완료 여부 확인
-   - analysis_status: "processing" → 계속 폴링
-   - analysis_status: "done" → 폴링 중단
-4. GET /diaries/{diary_id}/analysis  ← 후보 조회
-5. POST /diaries/{diary_id}/confirm  ← 확정
+1. POST /photos/batch-upload  ← 즉시 응답 (1-2초)
+   응답: { photo_id, diary_id, analysis_status: "processing" }
+
+2. 화면에 "분석 중..." 표시 (또는 GET /diaries로 목록 조회)
+
+3. FCM 푸시 수신 대기
+   └─ { diary_id: 2, action: "diary_analysis_complete" }
+
+4. GET /diaries/2  ← diary_id로 조회
+   응답: { diary_id: 2, analysis_status: "done", restaurant_name, category, ... }
+
+5. (필요시) GET /diaries/2/analysis  ← 후보 조회
+
+6. POST /diaries/2/confirm  ← 확정
 ```
 
-**서버 코드 예시 (2안):**
+**서버 코드 예시:**
 
 ```python
 from fastapi import BackgroundTasks
@@ -671,27 +623,72 @@ async def batch_upload_photos(
 ):
     # 1단계: 파일 저장 + Diary 생성
     photos = []
+    diary_ids = set()
+
     for file in files:
+        # EXIF 파싱, 파일 저장, Photo 레코드 생성
         photo = await save_and_create_photo(file, ...)
         photos.append(photo)
+        diary_ids.add(photo.diary_id)
 
-    # 2단계: 백그라운드 작업 등록 (즉시 반환)
-    for photo in photos:
-        background_tasks.add_task(analyze_photo, photo.id)
+    # 2단계: 백그라운드 분석 태스크 등록
+    for diary_id in diary_ids:
+        background_tasks.add_task(
+            analyze_and_notify,
+            diary_id=diary_id,
+            user_id=current_user.id
+        )
 
-    return {"created": [...]}  # 즉시 응답
+    # 3단계: 즉시 응답
+    return {
+        "results": [
+            {
+                "photo_id": p.id,
+                "diary_id": p.diary_id,
+                "image_url": p.image_url,
+                "analysis_status": "processing"
+            }
+            for p in photos
+        ]
+    }
+
+
+async def analyze_and_notify(diary_id: int, user_id: str):
+    """백그라운드 분석 + FCM 푸시"""
+    try:
+        # 1. 해당 다이어리의 모든 사진 분석 (병렬)
+        photos = await get_diary_photos(diary_id)
+        analysis_results = await asyncio.gather(
+            *[analyze_photo(p) for p in photos]
+        )
+
+        # 2. 분석 결과 DB 저장
+        for result in analysis_results:
+            await save_photo_analysis(result)
+
+        # 3. DiaryAnalysis 집계
+        await aggregate_photo_analysis_to_diary(diary_id)
+
+        # 4. Diary 상태 업데이트
+        await update_diary_status(diary_id, "done")
+
+        # 5. FCM 푸시 전송
+        await send_fcm_push(
+            user_id=user_id,
+            data={
+                "diary_id": str(diary_id),
+                "action": "diary_analysis_complete"
+            },
+            notification={
+                "title": "음식 일기 분석 완료",
+                "body": "새로운 다이어리를 확인해보세요!"
+            }
+        )
+    except Exception as e:
+        # 실패 시 상태 업데이트
+        await update_diary_status(diary_id, "failed")
+        logger.error(f"Analysis failed for diary {diary_id}: {e}")
 ```
-
----
-
-### **🎯 권장 선택 기준**
-
-| 상황                       | 권장 방식               |
-| -------------------------- | ----------------------- |
-| MVP / 초기 개발            | **1안** (동기 + 병렬)   |
-| 사진 1-5장 업로드가 대부분 | **1안** (동기 + 병렬)   |
-| 10장 이상 대량 업로드      | **2안** (비동기 + 폴링) |
-| 서버 안정성 중요           | **2안** (비동기 + 폴링) |
 
 ---
 
@@ -769,9 +766,9 @@ async def aggregate_photo_analysis_to_diary(db, diary_id):
 
 ---
 
-## **📆 3. 다이어리 조회 (프론트 메인 API)**
+## **📆 3. 다이어리 조회**
 
-### **GET /diaries**
+### **GET /diaries** (날짜 범위로 조회)
 
 > 하루 또는 기간 단위로 다이어리 목록 조회. Query Parameter로 조회 범위 지정.
 
@@ -804,11 +801,11 @@ GET /diaries?date=2026-01-19
         "restaurant_name": null,
         "category": null,
         "cover_photo_url": "...",
+        "photo_count": 3,
         "photos": [
           {
             "photo_id": 101,
-            "image_url": "...",
-            "analysis_status": "done"
+            "image_url": "..."
           }
         ]
       }
@@ -836,6 +833,7 @@ GET /diaries?start_date=2026-01-13&end_date=2026-01-19
                 "restaurant_name": "명동교자",
                 "category": "한식",
                 "cover_photo_url": "...",
+                "photo_count": 2,
                 "photos": [...]
             },
             {
@@ -845,6 +843,7 @@ GET /diaries?start_date=2026-01-13&end_date=2026-01-19
                 "restaurant_name": "스시히로바",
                 "category": "일식",
                 "cover_photo_url": "...",
+                "photo_count": 4,
                 "photos": [...]
             }
         ]
@@ -861,6 +860,7 @@ GET /diaries?start_date=2026-01-13&end_date=2026-01-19
                 "restaurant_name": "투썸플레이스",
                 "category": "카페",
                 "cover_photo_url": "...",
+                "photo_count": 1,
                 "photos": [...]
             }
         ]
@@ -883,6 +883,7 @@ GET /diaries?start_date=2026-01-13&end_date=2026-01-19
                 "restaurant_name": null,
                 "category": null,
                 "cover_photo_url": "...",
+                "photo_count": 3,
                 "photos": [...]
             }
         ]
@@ -893,10 +894,79 @@ GET /diaries?start_date=2026-01-13&end_date=2026-01-19
 > 📌 **응답 구조 설명**
 >
 > - 날짜별로 그룹핑된 딕셔너리 형태
+> - **analysis_status**: `processing` (분석 중) / `done` (완료) / `failed` (실패)
+>   - `processing`: 프론트에서 "분석 중..." UI 표시
+>   - `done`: 분석 완료 - restaurant_name, category 등 확정 데이터 사용 가능
+>   - `failed`: 분석 실패 - 재시도 UI 제공
 > - 다이어리가 없는 날짜도 빈 배열로 포함 (프론트에서 "기록 없음" UI 처리 용이)
 > - 기간 조회 시 최대 31일로 제한 권장 (성능 보장)
 
-````
+---
+
+### **GET /diaries/{diary_id}** (다이어리 ID로 조회)
+
+> FCM 푸시로 받은 diary_id를 사용하여 특정 다이어리 상세 조회
+
+**Path Parameters**
+
+| **파라미터** | **타입** | **필수** | **설명**    |
+| ------------ | -------- | -------- | ----------- |
+| diary_id     | integer  | ✅       | 다이어리 ID |
+
+---
+
+#### **예시: 다이어리 상세 조회**
+
+```
+GET /diaries/12
+```
+
+```json
+{
+  "diary_id": 12,
+  "user_id": "e435a643-a6c8-49ab-b14f-6dc4ae5af7be",
+  "diary_date": "2026-01-19",
+  "time_type": "lunch",
+  "analysis_status": "done",
+  "restaurant_name": "명동교자",
+  "category": "한식",
+  "cover_photo_url": "data/photos/abc123.JPG",
+  "note": null,
+  "tags": ["칼국수", "만두"],
+  "photo_count": 3,
+  "photos": [
+    {
+      "photo_id": 101,
+      "image_url": "data/photos/abc123.JPG",
+      "taken_at": "2026-01-19T12:30:00",
+      "taken_location": {
+        "latitude": 37.5219,
+        "longitude": 126.9245
+      }
+    },
+    {
+      "photo_id": 102,
+      "image_url": "data/photos/def456.JPG",
+      "taken_at": "2026-01-19T12:32:00",
+      "taken_location": null
+    },
+    {
+      "photo_id": 103,
+      "image_url": "data/photos/ghi789.JPG",
+      "taken_at": "2026-01-19T12:35:00",
+      "taken_location": null
+    }
+  ],
+  "created_at": "2026-01-19T12:40:00",
+  "updated_at": "2026-01-19T12:45:30"
+}
+```
+
+> 📌 **사용 시나리오**
+>
+> 1. FCM 푸시로 `diary_id` 수신
+> 2. `GET /diaries/{diary_id}`로 상세 조회
+> 3. `analysis_status: "done"` 확인 후 데이터 표시
 
 ---
 
@@ -906,24 +976,24 @@ GET /diaries?start_date=2026-01-13&end_date=2026-01-19
 
 > “이 식당 맞나요?” 화면에서만 사용
 
-```jsx
+```json
 {
-    "restaurant_candidates": [
-    { "name": "명동교자", "confidence": 0.92 }
-    ],
-    "category_candidates": ["한식"],
-    "menu_candidates": ["칼국수", "만두"]
+  "restaurant_candidates": [
+    { "name": "명동교자", "confidence": 0.92, "address": "서울 중구 명동..." }
+  ],
+  "category_candidates": ["한식"],
+  "menu_candidates": ["칼국수", "만두"]
 }
-````
+```
 
 ## **📆 5. 다이어리 확정 (유저 선택 저장)**
 
 ### **POST /diaries/{diary_id}/confirm**
 
-```jsx
+```json
 {
-    "restaurant_name": "명동교자",
-    "category": "한식"
+  "restaurant_name": "명동교자",
+  "category": "한식"
 }
 ```
 
@@ -933,15 +1003,81 @@ GET /diaries?start_date=2026-01-13&end_date=2026-01-19
 
 ➡️ 별도 PUT / PATCH 필요 없음
 
-## **🧠 프론트 실제 호출 흐름**
+## **🧠 프론트 실제 호출 흐름 (비동기 + FCM 방식)**
 
-```jsx
+```
 1. 로그인
-2. 메인 화면 진입 → GET /diaries?start_date=...&end_date=...  ← 일주일 조회
+   └─ POST /auth/login
+
+2. 메인 화면 진입
+   └─ GET /diaries?start_date=...&end_date=...  ← 일주일 조회
+   └─ analysis_status: "processing" / "done" / "failed" 확인
+
 3. 사진 여러 장 선택
-4. POST /photos/batch-upload
-5. GET /diaries?date=...  ← 해당 날짜 다이어리 갱신
-6. (필요시) GET /diaries/{diary_id}/analysis
-7. POST /diaries/{diary_id}/confirm
-8. GET /diaries?date=...  ← 확정 후 갱신
+
+4. 사진 업로드 (즉시 응답)
+   └─ POST /photos/batch-upload
+   └─ 응답: { photo_id, diary_id, analysis_status: "processing" }
+
+5. 화면에 "분석 중..." 표시
+   └─ GET /diaries?date=...  ← 목록 갱신 (선택적)
+   └─ analysis_status: "processing" 표시
+
+6. FCM 푸시 수신 (백그라운드 분석 완료)
+   └─ 푸시 데이터: { diary_id: 2, action: "diary_analysis_complete" }
+
+7. 다이어리 상세 조회
+   └─ GET /diaries/2  ← diary_id로 조회
+   └─ analysis_status: "done" 확인
+   └─ 분석 결과 표시
+
+8. (필요시) 후보 조회 - "이 식당 맞나요?" 화면
+   └─ GET /diaries/2/analysis
+   └─ restaurant_candidates, category_candidates, menu_candidates 표시
+
+9. 최종 확정
+   └─ POST /diaries/2/confirm
+   └─ { restaurant_name, category }
+
+10. 확정 후 목록 갱신
+    └─ GET /diaries?date=...
+    └─ 또는 GET /diaries/2 (단일 조회)
+```
+
+### **🔄 시나리오별 호출 패턴**
+
+#### **시나리오 1: 분석 완료 전 목록 조회**
+
+```
+1. POST /photos/batch-upload
+   → 응답: analysis_status: "processing"
+
+2. GET /diaries?date=2026-01-19
+   → 응답: analysis_status: "processing", restaurant_name: null
+
+3. 프론트: "분석 중..." UI 표시
+```
+
+#### **시나리오 2: FCM 푸시 수신 후 조회**
+
+```
+1. FCM 푸시 수신
+   → { diary_id: 2, action: "diary_analysis_complete" }
+
+2. GET /diaries/2
+   → 응답: analysis_status: "done", restaurant_name: "명동교자"
+
+3. 프론트: 분석 결과 표시
+```
+
+#### **시나리오 3: 앱 재진입 시**
+
+```
+1. GET /diaries?start_date=...&end_date=...
+   → 일주일 치 다이어리 조회
+
+2. analysis_status 확인
+   - "processing": "분석 중..." 표시
+   - "done": 결과 표시
+   - "failed": "재시도" 버튼 표시
 ```
