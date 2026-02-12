@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS devices (
     id SERIAL PRIMARY KEY,
     device_id VARCHAR(255) NOT NULL,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT False,
     device_token VARCHAR(255),
     app_version VARCHAR(20) NOT NULL,
     os_version VARCHAR(20) NOT NULL,
@@ -136,8 +136,8 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 
 -- Devices 테이블 인덱스
-CREATE INDEX IF NOT EXISTS idx_device_device_id
-    ON devices(device_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_device_id 
+    ON devices(device_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_device_user_id
     ON devices(user_id);
 
