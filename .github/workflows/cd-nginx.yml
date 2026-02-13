@@ -1,0 +1,55 @@
+name: Nginx CD
+
+# nginx/ 폴더 변경 시에만 실행
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "nginx/**"
+
+jobs:
+  deploy-nginx:
+    runs-on: ubuntu-22.04
+
+    steps:
+      # 1. 저장소 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Nginx 설정 파일을 서버로 전송
+      - name: Copy Nginx config to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.API_SERVER_HOST }}
+          username: ${{ secrets.API_SERVER_USERNAME }}
+          key: ${{ secrets.API_SERVER_KEY }}
+          port: ${{ secrets.API_SERVER_PORT }}
+          source: "nginx/nginx.conf,nginx/docker-compose.nginx.yml"
+          target: "/home/${{ secrets.API_SERVER_USERNAME }}"
+          strip_components: 0
+
+      # 3. SSH로 서버 접속 후 Nginx 컨테이너 재시작
+      - name: Deploy Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.API_SERVER_HOST }}
+          username: ${{ secrets.API_SERVER_USERNAME }}
+          key: ${{ secrets.API_SERVER_KEY }}
+          port: ${{ secrets.API_SERVER_PORT }}
+          script: |
+            cd /home/${{ secrets.API_SERVER_USERNAME }}/nginx
+            export STORAGE_PATH=${{ secrets.STORAGE_PATH }}
+            export NOTI_EMAIL=${{ secrets.NOTI_EMAIL }}
+
+            # 인증서가 없으면 standalone으로 최초 발급
+            CERT_EXISTS=$(sudo docker run --rm -v certbot-certs:/etc/letsencrypt certbot/certbot certificates 2>/dev/null | grep -c "mumuk.ai.kr" || true)
+            if [ "$CERT_EXISTS" -eq 0 ]; then
+              sudo docker run --rm -p 80:80 \
+                -v certbot-certs:/etc/letsencrypt \
+                certbot/certbot certonly --standalone \
+                -d mumuk.ai.kr --email ${{ secrets.NOTI_EMAIL }} \
+                --agree-tos --no-eff-email
+            fi
+
+            sudo -E docker compose -f docker-compose.nginx.yml up -d --force-recreate
