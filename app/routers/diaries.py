@@ -9,10 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
-from app.schemas.diary import (
-    DiaryWithPhotos,
-    PhotoInDiary,
-)
+from app.schemas.diary import DiaryWithPhotos, PhotoInDiary
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
@@ -193,16 +190,16 @@ def _get_mock_diaries_response(start_date: date, end_date: date) -> dict[str, di
                             {
                                 "photo_id": day * 10 + 1,
                                 "image_url": f"https://picsum.photos/seed/photo{day}a/400/300",
-                                "analysis_status": "processing"
-                                if is_processing
-                                else "done",
+                                "analysis_status": (
+                                    "processing" if is_processing else "done"
+                                ),
                             },
                             {
                                 "photo_id": day * 10 + 2,
                                 "image_url": f"https://picsum.photos/seed/photo{day}b/400/300",
-                                "analysis_status": "processing"
-                                if is_processing
-                                else "done",
+                                "analysis_status": (
+                                    "processing" if is_processing else "done"
+                                ),
                             },
                         ],
                     },
