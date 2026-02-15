@@ -77,30 +77,21 @@ class PhotoResponse(PhotoBase):
 
 class PhotoUploadResult(BaseModel):
     """
-    사진 업로드 결과
+    사진 업로드 결과 (비동기 방식)
 
-    POST /photos/batch-upload 응답 항목
+    POST /photos/batch-upload 즉시 응답
+    - 파일 저장 및 Diary 생성만 완료
+    - 분석은 백그라운드에서 진행 (analysis_status: "processing")
     """
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "photo_id": 101,
-                "diary_id": 12,
-                "time_type": "lunch",
-                "image_url": "data/photos/abc123.jpg",
-                "analysis": {
-                    "food_category": "한식",
-                    "restaurant_candidates": [
-                        {
-                            "name": "명동교자",
-                            "confidence": 0.92,
-                            "address": "서울시 중구",
-                        }
-                    ],
-                    "menu_candidates": [{"name": "칼국수"}],
-                    "keywords": ["얼큰한", "구수한"],
-                },
+                "photo_id": 19,
+                "diary_id": 2,
+                "time_type": "dinner",
+                "image_url": "data/photos/22a85dba-9ad1-4c87-9fa8-26cd5aefe096.JPG",
+                "analysis_status": "processing",
             }
         }
     )
@@ -109,16 +100,19 @@ class PhotoUploadResult(BaseModel):
     diary_id: int = Field(..., description="연결된 다이어리 ID")
     time_type: TimeType = Field(..., description="분류된 끼니 종류")
     image_url: str = Field(..., description="이미지 URL")
-    analysis: PhotoAnalysisResult | None = Field(
-        None, description="분석 결과 (분석 완료 시)"
+    analysis_status: AnalysisStatus = Field(
+        ..., description="분석 상태 (processing/done/failed)"
     )
 
 
 class BatchUploadResponse(BaseModel):
     """
-    배치 업로드 응답
+    배치 업로드 응답 (비동기 방식)
 
     POST /photos/batch-upload
+    - 즉시 응답 (1-2초)
+    - 분석은 백그라운드에서 진행
+    - FCM 푸시로 완료 알림
     """
 
     model_config = ConfigDict(
@@ -126,25 +120,27 @@ class BatchUploadResponse(BaseModel):
             "example": {
                 "results": [
                     {
-                        "photo_id": 101,
-                        "diary_id": 12,
-                        "time_type": "lunch",
-                        "image_url": "data/photos/abc123.jpg",
-                        "analysis": {
-                            "food_category": "한식",
-                            "restaurant_candidates": [
-                                {"name": "명동교자", "confidence": 0.92}
-                            ],
-                            "menu_candidates": [{"name": "칼국수"}],
-                            "keywords": ["얼큰한"],
-                        },
-                    }
+                        "photo_id": 19,
+                        "diary_id": 2,
+                        "time_type": "dinner",
+                        "image_url": (
+                            "data/photos/22a85dba-9ad1-4c87-9fa8-26cd5aefe096.JPG"
+                        ),
+                        "analysis_status": "processing",
+                    },
+                    {
+                        "photo_id": 20,
+                        "diary_id": 2,
+                        "time_type": "dinner",
+                        "image_url": "data/photos/abc123.JPG",
+                        "analysis_status": "processing",
+                    },
                 ]
             }
         }
     )
 
-    results: list[PhotoUploadResult] = Field(..., description="업로드 및 분석 결과")
+    results: list[PhotoUploadResult] = Field(..., description="업로드 결과 목록")
 
 
 class PhotoAnalysisResultResponse(BaseModel):

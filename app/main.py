@@ -8,6 +8,7 @@ from app.core.database import create_tables
 from app.routers import (
     auth_router,
     device_router,
+    diaries_router,
     health_router,
     insights_router,
     photos_router,
@@ -41,5 +42,6 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(device_router)
+app.include_router(diaries_router)
 app.include_router(insights_router)
 app.include_router(photos_router)
