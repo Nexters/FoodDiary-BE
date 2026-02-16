@@ -67,6 +67,8 @@ async def search_nearby_restaurants(
                     {
                         "name": place["place_name"],
                         "address": place["address_name"],
+                        "road_address": place.get("road_address_name", ""),
+                        "kakao_id": place.get("id", ""),
                         "category": place.get("category_name", ""),
                         "distance": int(place.get("distance", 0)),
                     }

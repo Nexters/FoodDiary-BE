@@ -103,7 +103,7 @@ class PhotoInDiary(BaseModel):
     """다이어리 조회 시 포함되는 사진 정보"""
 
     photo_id: int = Field(..., description="사진 ID")
-    image_url: str = Field(..., description="사진 URL")
+    full_image_url: str = Field(..., description="사진 URL")
     analysis_status: AnalysisStatus = Field(..., description="분석 상태")
 
 
@@ -115,7 +115,6 @@ class DiaryWithPhotos(DiaryResponse):
     """
 
     photos: list[PhotoInDiary] = Field(default=[], description="사진 목록")
-    analysis_status: AnalysisStatus = Field(..., description="전체 분석 상태")
 
 
 class DiariesByDateResponse(BaseModel):
@@ -146,11 +145,10 @@ class DiariesByDateResponse(BaseModel):
                         "photos": [
                             {
                                 "photo_id": 101,
-                                "image_url": "https://...",
+                                "full_image_url": "https://...",
                                 "analysis_status": "done",
                             }
                         ],
-                        "analysis_status": "done",
                     }
                 ],
             }
@@ -172,6 +170,9 @@ class RestaurantCandidate(BaseModel):
     name: str = Field(..., description="식당명")
     confidence: float | None = Field(None, description="신뢰도 (0~1)", ge=0, le=1)
     address: str | None = Field(None, description="주소")
+    url: str | None = Field(None, description="식당 지도 URL")
+    road_address: str | None = Field(None, description="도로명 주소")
+    zone_no: str | None = Field(None, description="우편번호")
 
 
 class DiaryAnalysisResponse(BaseModel):
