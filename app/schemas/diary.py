@@ -40,15 +40,16 @@ class DiaryCreate(BaseModel):
 
 
 class DiaryUpdate(BaseModel):
-    """Diary 업데이트 스키마"""
+    """다이어리 수정 요청 스키마 (PATCH /diaries/{diary_id})"""
 
+    category: str | None = None
     restaurant_name: str | None = None
     restaurant_url: str | None = None
     road_address: str | None = None
-    category: str | None = None
-    cover_photo_id: int | None = None
-    note: str | None = None
     tags: list[str] | None = None
+    note: str | None = None
+    cover_photo_id: int | None = None
+    photo_ids: list[int] | None = None
 
 
 class DiaryConfirm(BaseModel):

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
-from app.schemas.diary import DiaryWithPhotos, PhotoInDiary
+from app.schemas.diary import DiaryUpdate, DiaryWithPhotos, PhotoInDiary
 from app.services import diary_service
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -142,7 +142,30 @@ async def get_diary_by_id(
     if diary is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Diary not found or you don't have access. Try re-login and use the new token.",
+            detail="Diary not found or you don't have access.",
+        )
+    return diary
+
+
+@router.patch("/{diary_id}", response_model=DiaryWithPhotos)
+async def update_diary(
+    diary_id: int,
+    body: DiaryUpdate,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    다이어리 수정 (수정 화면 "저장").
+
+    전달된 필드만 반영. photo_ids가 있으면 해당 ID만 유지·순서 반영, 나머지 사진 삭제.
+    """
+    diary = await diary_service.update_diary(
+        db=db, user_id=user_id, diary_id=diary_id, body=body
+    )
+    if diary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
         )
     return diary
 
