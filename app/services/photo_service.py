@@ -176,9 +176,9 @@ async def batch_upload_photos(
     Returns:
         list[PhotoUploadResult]: 업로드 결과 목록
     """
-    photo_infos: list[
-        tuple[Photo, int, str]
-    ] = []  # [(photo, diary_id, time_type), ...]
+    photo_infos: list[tuple[Photo, int, str]] = (
+        []
+    )  # [(photo, diary_id, time_type), ...]
 
     # ========================================
     # 1단계: 파일 저장 + DB 저장 (순차 처리)
@@ -240,14 +240,14 @@ async def batch_upload_photos(
         logger.info("Mock 분석 데이터 생성 완료")
     else:
         logger.info(f"LLM 분석 시작: {len(photo_infos)}개 사진")
-        analysis_results: list[
-            AnalysisData | None | BaseException
-        ] = await asyncio.gather(
-            *[
-                analyze_photo_data(photo.image_url, photo.id, photo.taken_location)
-                for photo, _, _ in photo_infos
-            ],
-            return_exceptions=True,
+        analysis_results: list[AnalysisData | None | BaseException] = (
+            await asyncio.gather(
+                *[
+                    analyze_photo_data(photo.image_url, photo.id, photo.taken_location)
+                    for photo, _, _ in photo_infos
+                ],
+                return_exceptions=True,
+            )
         )
         logger.info("LLM 분석 완료")
 
