@@ -4,6 +4,7 @@ from app.routers.diaries import router as diaries_router
 from app.routers.health import router as health_router
 from app.routers.insights import router as insights_router
 from app.routers.photos import router as photos_router
+from app.routers.restaurant import router as restaurant_router
 
 __all__ = [
     "auth_router",
@@ -12,4 +13,5 @@ __all__ = [
     "health_router",
     "insights_router",
     "photos_router",
+    "restaurant_router",
 ]
