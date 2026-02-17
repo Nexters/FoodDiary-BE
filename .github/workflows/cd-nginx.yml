@@ -54,4 +54,5 @@ jobs:
 
             # 기존 컨테이너 정리 후 재생성
             sudo -E docker compose -f docker-compose.nginx.yml down --remove-orphans || true
+            sudo docker rm -f mumuk-nginx mumuk-certbot 2>/dev/null || true
             sudo -E docker compose -f docker-compose.nginx.yml up -d
