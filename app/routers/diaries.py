@@ -214,6 +214,26 @@ async def add_diary_photos(
     return AddDiaryPhotosResponse(photo_ids=photo_ids)
 
 
+@router.delete("/{diary_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_diary(
+    diary_id: int,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    다이어리 전체 삭제 (수정 화면 "삭제" 버튼).
+    소프트 삭제(deleted_at 설정). 소유자만 가능.
+    """
+    deleted = await diary_service.delete_diary(
+        db=db, user_id=user_id, diary_id=diary_id
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
+        )
+
+
 # ========================================
 # Mock 데이터 생성 함수들
 # ========================================

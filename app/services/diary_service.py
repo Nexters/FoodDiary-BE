@@ -342,3 +342,26 @@ async def add_photos_to_diary(
 
     await db.commit()
     return new_photo_ids
+
+
+async def delete_diary(
+    db: AsyncSession,
+    user_id: UUID,
+    diary_id: int,
+) -> bool:
+    """
+    다이어리 전체 삭제 (소프트 삭제).
+    소유자만 가능. 없거나 권한 없으면 False.
+    """
+    stmt = select(Diary).where(
+        Diary.id == diary_id,
+        Diary.user_id == user_id,
+        Diary.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    diary = result.scalar_one_or_none()
+    if diary is None:
+        return False
+    diary.deleted_at = datetime.now(UTC)
+    await db.commit()
+    return True
