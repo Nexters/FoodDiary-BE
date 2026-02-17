@@ -84,3 +84,58 @@ async def search_nearby_restaurants(
             return all_restaurants
     except Exception:
         return []  # API 실패 시 빈 리스트 반환
+
+
+async def search_restaurants_by_keyword(
+    keyword: str,
+    page: int = 1,
+    size: int = 15,
+) -> dict:
+    """
+    키워드로 음식점을 검색합니다.
+
+    Args:
+        keyword: 검색 키워드 (음식점 이름)
+        page: 페이지 번호 (1~45)
+        size: 페이지당 결과 수 (1~15)
+
+    Returns:
+        dict: {"restaurants": [...], "total_count": int, "is_end": bool}
+    """
+    if not settings.KAKAO_REST_API_KEY:
+        return {"restaurants": [], "total_count": 0, "is_end": True}
+
+    url = "https://dapi.kakao.com/v2/local/search/keyword.json"
+    headers = {"Authorization": f"KakaoAK {settings.KAKAO_REST_API_KEY}"}
+    params = {
+        "query": keyword,
+        "category_group_code": "FD6",
+        "page": page,
+        "size": size,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            documents = data.get("documents", [])
+            meta = data.get("meta", {})
+
+            restaurants = [
+                {
+                    "name": place["place_name"],
+                    "road_address": place.get("road_address_name", ""),
+                    "url": place.get("place_url", ""),
+                }
+                for place in documents
+            ]
+
+            return {
+                "restaurants": restaurants,
+                "total_count": meta.get("total_count", 0),
+                "is_end": meta.get("is_end", True),
+            }
+    except Exception:
+        return {"restaurants": [], "total_count": 0, "is_end": True}
