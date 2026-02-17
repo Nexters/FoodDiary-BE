@@ -30,6 +30,7 @@ class Diary(Base):
     time_type: Mapped[str] = mapped_column(String(20), nullable=False)
     restaurant_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    place_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cover_photo_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("photos.id", ondelete="SET NULL"), nullable=True
     )

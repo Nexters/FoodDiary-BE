@@ -101,6 +101,7 @@
 | analysis_status | processing(분석중) / done(완료) / failed(실패)                 |
 | restaurant_name | 유저가 최종 확정한 식당명                                      |
 | category        | 유저가 최종 확정한 음식 카테고리                               |
+| place_url       | 장소 URL (예: 카카오맵 링크 https://place.map.kakao.com/xxxxx) |
 | cover_photo_id  | 대표 썸네일 사진                                               |
 | note            | 메모 (필요하면)                                                |
 | tags            | 다이어리에 최종적으로 보여질 태그(일단 사진들의 음식명 리스트) |
@@ -930,6 +931,7 @@ GET /diaries/12
   "analysis_status": "done",
   "restaurant_name": "명동교자",
   "category": "한식",
+  "place_url": "https://place.map.kakao.com/477096726",
   "cover_photo_url": "data/photos/abc123.JPG",
   "note": null,
   "tags": ["칼국수", "만두"],
@@ -994,6 +996,17 @@ GET /diaries/12
 {
   "restaurant_name": "명동교자",
   "category": "한식"
+}
+```
+
+**Response (성공 시):**
+
+```json
+{
+  "diary_id": 12,
+  "restaurant_name": "명동교자",
+  "category": "한식",
+  "place_url": "https://place.map.kakao.com/477096726"
 }
 ```
 

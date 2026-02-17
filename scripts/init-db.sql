@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS diaries (
     time_type VARCHAR(20) NOT NULL CHECK (time_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
     restaurant_name VARCHAR(255),
     category VARCHAR(100),
+    place_url VARCHAR(500),
     cover_photo_id INTEGER,
     note TEXT,
     tags JSONB DEFAULT '[]'::jsonb,
@@ -63,6 +64,9 @@ CREATE INDEX IF NOT EXISTS idx_diaries_user_date
     ON diaries(user_id, diary_date DESC);
 CREATE INDEX IF NOT EXISTS idx_diaries_user_id 
     ON diaries(user_id);
+
+-- Diaries 테이블 컬럼 설명
+COMMENT ON COLUMN diaries.place_url IS '장소 URL (예: 카카오맵 링크 https://place.map.kakao.com/xxxxx)';
 
 -- ======================
 -- DiaryAnalysis 테이블

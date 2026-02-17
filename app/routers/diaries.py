@@ -179,6 +179,11 @@ def _get_mock_diaries_response(start_date: date, end_date: date) -> dict[str, di
                         "analysis_status": "processing" if is_processing else "done",
                         "restaurant_name": None if is_processing else "명동교자",
                         "category": None if is_processing else "한식",
+                        "place_url": (
+                            None
+                            if is_processing
+                            else "https://place.map.kakao.com/477096726"
+                        ),
                         "cover_photo_id": day * 10 + 1,
                         "cover_photo_url": f"https://picsum.photos/seed/lunch{day}/400/300",
                         "note": None if is_processing else "칼국수가 정말 맛있었다",
@@ -211,6 +216,7 @@ def _get_mock_diaries_response(start_date: date, end_date: date) -> dict[str, di
                         "analysis_status": "done",
                         "restaurant_name": "스시히로바",
                         "category": "일식",
+                        "place_url": "https://place.map.kakao.com/12345678",
                         "cover_photo_id": day * 10 + 6,
                         "cover_photo_url": f"https://picsum.photos/seed/dinner{day}/400/300",
                         "note": "신선한 회가 일품",
@@ -250,6 +256,7 @@ def _get_mock_diaries_response(start_date: date, end_date: date) -> dict[str, di
                         "analysis_status": "done",
                         "restaurant_name": "투썸플레이스",
                         "category": "카페",
+                        "place_url": "https://place.map.kakao.com/23456789",
                         "cover_photo_id": day * 10 + 1,
                         "cover_photo_url": f"https://picsum.photos/seed/breakfast{day}/400/300",
                         "note": "커피 한 잔의 여유",
@@ -291,6 +298,7 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
             analysis_status="done",
             restaurant_name="명동교자",
             category="한식",
+            place_url="https://place.map.kakao.com/477096726",
             cover_photo_id=101,
             cover_photo_url="https://picsum.photos/seed/diary12/400/300",
             note="칼국수 맛집 발견!",
@@ -326,6 +334,7 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
             analysis_status="processing",
             restaurant_name=None,
             category=None,
+            place_url=None,
             cover_photo_id=95,
             cover_photo_url="https://picsum.photos/seed/diary10/400/300",
             note=None,
@@ -355,6 +364,7 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
         analysis_status="done",
         restaurant_name="스타벅스",
         category="카페",
+        place_url="https://place.map.kakao.com/34567890",
         cover_photo_id=200,
         cover_photo_url="https://picsum.photos/seed/default/400/300",
         note="모닝 커피",
