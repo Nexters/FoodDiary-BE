@@ -176,9 +176,11 @@ async def batch_upload_photos(
     Returns:
         list[PhotoUploadResult]: 업로드 결과 목록
     """
-    photo_infos: list[tuple[Photo, int, str]] = (
-        []
-    )  # [(photo, diary_id, time_type), ...]
+    photo_infos: list[
+        tuple[Photo, int, str]
+    ] = []  # [(photo, diary_id, time_type), ...]
+    # diary_id별 성공한 사진 개수 추적
+    diary_photo_counts: dict[int, int] = {}
 
     # ========================================
     # 1단계: 파일 저장 + DB 저장 (순차 처리)
@@ -210,12 +212,14 @@ async def batch_upload_photos(
                 taken_location=taken_location,
             )
             db.add(photo)
+            await db.flush()  # photo.id 생성을 위해 flush
 
-            # Diary의 photo_count 증가
-            diary.photo_count = (diary.photo_count or 0) + 1
-
+            # commit 성공 후에 photo_count 증가 (트랜잭션 완료 시점)
             await db.commit()
             await db.refresh(photo)
+
+            # commit 성공했으므로 카운트 증가
+            diary_photo_counts[diary.id] = diary_photo_counts.get(diary.id, 0) + 1
 
             photo_infos.append((photo, diary.id, time_type))
 
@@ -224,6 +228,21 @@ async def batch_upload_photos(
             # 트랜잭션 rollback 후 계속 진행
             await db.rollback()
             continue
+
+    # ========================================
+    # 1-2단계: 다이어리별 photo_count 업데이트 (실제 성공 개수 반영)
+    # ========================================
+    for diary_id, count in diary_photo_counts.items():
+        try:
+            diary_stmt = select(Diary).where(Diary.id == diary_id)
+            diary_result = await db.execute(diary_stmt)
+            diary = diary_result.scalar_one_or_none()
+            if diary:
+                diary.photo_count = (diary.photo_count or 0) + count
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"photo_count 업데이트 실패: diary_id={diary_id}, {e}")
+            await db.rollback()
 
     if not photo_infos:
         return []
@@ -240,14 +259,14 @@ async def batch_upload_photos(
         logger.info("Mock 분석 데이터 생성 완료")
     else:
         logger.info(f"LLM 분석 시작: {len(photo_infos)}개 사진")
-        analysis_results: list[AnalysisData | None | BaseException] = (
-            await asyncio.gather(
-                *[
-                    analyze_photo_data(photo.image_url, photo.id, photo.taken_location)
-                    for photo, _, _ in photo_infos
-                ],
-                return_exceptions=True,
-            )
+        analysis_results: list[
+            AnalysisData | None | BaseException
+        ] = await asyncio.gather(
+            *[
+                analyze_photo_data(photo.image_url, photo.id, photo.taken_location)
+                for photo, _, _ in photo_infos
+            ],
+            return_exceptions=True,
         )
         logger.info("LLM 분석 완료")
 

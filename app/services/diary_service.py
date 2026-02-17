@@ -402,10 +402,15 @@ async def add_photos_to_diary(
     Raises:
         ValueError: 사진 개수가 10개를 초과하는 경우
     """
-    stmt = select(Diary).where(
-        Diary.id == diary_id,
-        Diary.user_id == user_id,
-        Diary.deleted_at.is_(None),
+    # SELECT ... FOR UPDATE로 락 획득하여 동시성 제어
+    stmt = (
+        select(Diary)
+        .where(
+            Diary.id == diary_id,
+            Diary.user_id == user_id,
+            Diary.deleted_at.is_(None),
+        )
+        .with_for_update()
     )
     result = await db.execute(stmt)
     diary = result.scalar_one_or_none()
