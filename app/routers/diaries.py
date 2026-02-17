@@ -215,6 +215,9 @@ async def add_diary_photos(
 
     multipart/form-data로 이미지 1장 이상. 새로 생성된 photo_id 목록 반환.
     저장 시 PATCH의 photo_ids에 기존 id + 이 응답의 photo_ids를 넣으면 됨.
+
+    **제한사항:**
+    - 다이어리당 최대 10개의 사진만 업로드 가능
     """
     if not photos:
         raise HTTPException(
@@ -227,9 +230,16 @@ async def add_diary_photos(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only image files are allowed.",
             )
-    photo_ids = await diary_service.add_photos_to_diary(
-        db=db, user_id=user_id, diary_id=diary_id, files=photos
-    )
+    try:
+        photo_ids = await diary_service.add_photos_to_diary(
+            db=db, user_id=user_id, diary_id=diary_id, files=photos
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
     if photo_ids is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

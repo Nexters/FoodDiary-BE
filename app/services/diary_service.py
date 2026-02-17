@@ -19,6 +19,9 @@ from app.schemas.diary import (
 )
 from app.utils.file_storage import save_user_photo
 
+# 다이어리당 최대 사진 개수
+MAX_PHOTOS_PER_DIARY = 10
+
 
 async def get_or_create_diary(
     db: AsyncSession,
@@ -394,6 +397,10 @@ async def add_photos_to_diary(
     기존 다이어리에 사진을 추가합니다.
     소유자 검증 후 파일 저장 + Photo 생성, diary.photo_count 증가.
     없거나 권한 없으면 None 반환.
+    사진은 최대 10개까지 추가 가능.
+
+    Raises:
+        ValueError: 사진 개수가 10개를 초과하는 경우
     """
     stmt = select(Diary).where(
         Diary.id == diary_id,
@@ -404,6 +411,17 @@ async def add_photos_to_diary(
     diary = result.scalar_one_or_none()
     if diary is None:
         return None
+
+    # 사진 개수 제한 체크
+    current_photo_count = diary.photo_count
+    new_photo_count = len(files)
+    total_photo_count = current_photo_count + new_photo_count
+
+    if total_photo_count > MAX_PHOTOS_PER_DIARY:
+        raise ValueError(
+            f"다이어리당 최대 {MAX_PHOTOS_PER_DIARY}개의 사진만 업로드할 수 있습니다. "
+            f"현재: {current_photo_count}개, 추가 시도: {new_photo_count}개"
+        )
 
     new_photo_ids: list[int] = []
     for file in files:
