@@ -32,6 +32,9 @@ class Diary(Base):
     restaurant_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     road_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    analysis_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="processing"
+    )  # processing | done | failed (새로 생성 = 분석 전)
     cover_photo_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("photos.id", ondelete="SET NULL"), nullable=True
     )

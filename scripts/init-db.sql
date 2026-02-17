@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS diaries (
     restaurant_url VARCHAR(500),
     road_address TEXT,
     category VARCHAR(100),
+    analysis_status VARCHAR(20) NOT NULL DEFAULT 'processing' CHECK (analysis_status IN ('processing', 'done', 'failed')),
     cover_photo_id INTEGER,
     note TEXT,
     tags JSONB DEFAULT '[]'::jsonb,
