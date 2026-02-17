@@ -384,6 +384,8 @@ async def update_diary(
             diary.cover_photo_id = photo_ids_ordered[0] if photo_ids_ordered else None
 
     await db.commit()
+    # 세션의 모든 객체를 만료시켜 다음 조회 시 DB에서 최신 데이터 로드
+    db.expire_all()
     return await get_diary_by_id(db, user_id, diary_id)
 
 
