@@ -51,6 +51,28 @@ uvicorn app.main:app --reload
 - Health Check: http://localhost:8000/health
 - API 문서: http://localhost:8000/docs
 
+## 🧪 테스트 모드 (프론트엔드 개발용)
+
+프론트엔드 개발 및 테스트를 위한 mock 데이터 API를 제공합니다.
+
+### 특징
+
+- `test_mode=true` 쿼리 파라미터로 간단히 활성화
+- 실제 LLM 호출 없이 즉시 응답 (비용 절감 💰)
+- 실제 API 스펙과 동일한 응답 포맷
+- 다양한 시나리오의 하드코딩된 데이터
+
+### 지원 API
+
+1. **POST /photos/batch-upload?test_mode=true**
+   - 사진 업로드 및 분석 (mock 데이터 반환)
+2. **GET /diaries?date=2026-01-19&test_mode=true**
+   - 날짜별 다이어리 목록 조회
+3. **GET /diaries/{diary_id}?test_mode=true**
+   - 다이어리 상세 조회
+
+📖 **상세 가이드**: [docs/test_mode_api_guide.md](docs/test_mode_api_guide.md)
+
 ## 데이터베이스
 
 ### DB 초기화

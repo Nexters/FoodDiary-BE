@@ -18,6 +18,8 @@ class DiaryBase(BaseModel):
     diary_date: date = Field(..., description="일기 날짜")
     time_type: TimeType = Field(..., description="끼니 종류")
     restaurant_name: str | None = Field(None, description="식당명")
+    restaurant_url: str | None = Field(None, description="식당 URL (예: 카카오맵 링크)")
+    road_address: str | None = Field(None, description="도로명 주소")
     category: str | None = Field(None, description="음식 카테고리")
     note: str | None = Field(None, description="메모")
     tags: list[str] = Field(default=[], description="태그 리스트")
@@ -41,6 +43,8 @@ class DiaryUpdate(BaseModel):
     """Diary 업데이트 스키마"""
 
     restaurant_name: str | None = None
+    restaurant_url: str | None = None
+    road_address: str | None = None
     category: str | None = None
     cover_photo_id: int | None = None
     note: str | None = None
@@ -60,6 +64,8 @@ class DiaryConfirm(BaseModel):
             "example": {
                 "restaurant_name": "명동교자",
                 "category": "한식",
+                "restaurant_url": "https://place.map.kakao.com/477096726",
+                "road_address": "서울 중구 명동길 29",
                 "note": "칼국수가 정말 맛있었다",
                 "tags": ["칼국수", "만두"],
             }
@@ -68,6 +74,8 @@ class DiaryConfirm(BaseModel):
 
     restaurant_name: str = Field(..., description="확정된 식당명")
     category: str = Field(..., description="확정된 음식 카테고리")
+    restaurant_url: str | None = Field(None, description="식당 URL (예: 카카오맵 링크)")
+    road_address: str | None = Field(None, description="도로명 주소")
     note: str | None = Field(None, description="메모")
     tags: list[str] | None = Field(None, description="태그 리스트")
 
