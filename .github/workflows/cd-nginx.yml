@@ -52,4 +52,6 @@ jobs:
                 --agree-tos --no-eff-email
             fi
 
-            sudo -E docker compose -f docker-compose.nginx.yml up -d --force-recreate
+            # 기존 컨테이너 정리 후 재생성
+            sudo -E docker compose -f docker-compose.nginx.yml down --remove-orphans || true
+            sudo -E docker compose -f docker-compose.nginx.yml up -d
