@@ -11,6 +11,7 @@ from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.diary import (
     AddDiaryPhotosResponse,
+    DiaryAnalysisResponse,
     DiaryUpdate,
     DiaryWithPhotos,
     PhotoInDiary,
@@ -150,6 +151,29 @@ async def get_diary_by_id(
             detail="Diary not found or you don't have access.",
         )
     return diary
+
+
+@router.get("/{diary_id}/suggestions", response_model=DiaryAnalysisResponse)
+async def get_diary_suggestions(
+    diary_id: int,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    다이어리 분석 제안 조회 (식당, 카테고리, 메뉴 후보)
+
+    "이 식당을 찾고 계신가요?" 화면에서 사용
+    DiaryAnalysis의 restaurant_candidates, category_candidates, menu_candidates 반환
+    """
+    analysis = await diary_service.get_diary_analysis(
+        db=db, user_id=user_id, diary_id=diary_id
+    )
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis not found or diary doesn't exist.",
+        )
+    return analysis
 
 
 @router.patch("/{diary_id}", response_model=DiaryWithPhotos)

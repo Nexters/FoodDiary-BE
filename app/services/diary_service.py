@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Diary, Photo
-from app.schemas.diary import DiaryUpdate, DiaryWithPhotos, PhotoInDiary
+from app.models.diary import DiaryAnalysis
+from app.schemas.diary import (
+    DiaryAnalysisResponse,
+    DiaryUpdate,
+    DiaryWithPhotos,
+    PhotoInDiary,
+    RestaurantCandidate,
+)
 from app.utils.file_storage import save_user_photo
 
 
@@ -229,6 +236,76 @@ async def get_diary_by_id(
         created_at=diary.created_at,
         updated_at=diary.updated_at,
         photos=photos,
+    )
+
+
+async def get_diary_analysis(
+    db: AsyncSession,
+    user_id: UUID,
+    diary_id: int,
+) -> DiaryAnalysisResponse | None:
+    """
+    다이어리 분석 후보 조회
+
+    DiaryAnalysis의 restaurant_candidates, category_candidates, menu_candidates 반환
+    "이 식당을 찾고 계신가요?" 화면에서 사용
+
+    Args:
+        db: 데이터베이스 세션
+        user_id: 사용자 ID
+        diary_id: 다이어리 ID
+
+    Returns:
+        DiaryAnalysisResponse 또는 None
+    """
+    # 1. Diary 소유자 검증
+    diary_stmt = select(Diary).where(
+        Diary.id == diary_id,
+        Diary.user_id == user_id,
+        Diary.deleted_at.is_(None),
+    )
+    diary_result = await db.execute(diary_stmt)
+    diary = diary_result.scalar_one_or_none()
+
+    if diary is None:
+        return None
+
+    # 2. DiaryAnalysis 조회
+    analysis_stmt = select(DiaryAnalysis).where(DiaryAnalysis.diary_id == diary_id)
+    analysis_result = await db.execute(analysis_stmt)
+    analysis = analysis_result.scalar_one_or_none()
+
+    if analysis is None:
+        # 분석 결과가 없으면 빈 리스트 반환
+        return DiaryAnalysisResponse(
+            restaurant_candidates=[],
+            category_candidates=[],
+            menu_candidates=[],
+        )
+
+    # 3. restaurant_candidates 변환
+    restaurant_candidates = []
+    if analysis.restaurant_candidates:
+        for r in analysis.restaurant_candidates:
+            restaurant_candidates.append(
+                RestaurantCandidate(
+                    name=r.get("name", ""),
+                    confidence=r.get("confidence"),
+                    address=r.get("address"),
+                    url=r.get("url"),
+                )
+            )
+
+    # 4. category_candidates (이미 문자열 리스트)
+    category_candidates = analysis.category_candidates or []
+
+    # 5. menu_candidates (이미 문자열 리스트)
+    menu_candidates = analysis.menu_candidates or []
+
+    return DiaryAnalysisResponse(
+        restaurant_candidates=restaurant_candidates,
+        category_candidates=category_candidates,
+        menu_candidates=menu_candidates,
     )
 
 
