@@ -108,6 +108,12 @@ class PhotoInDiary(BaseModel):
     analysis_status: AnalysisStatus = Field(..., description="분석 상태")
 
 
+class AddDiaryPhotosResponse(BaseModel):
+    """기존 다이어리에 사진 추가 시 응답 (POST /diaries/{diary_id}/photos)"""
+
+    photo_ids: list[int] = Field(..., description="새로 생성된 사진 ID 목록")
+
+
 class DiaryWithPhotos(DiaryResponse):
     """
     사진 목록을 포함한 다이어리 응답

@@ -3,12 +3,14 @@
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
+from fastapi import UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Diary, Photo
 from app.schemas.diary import DiaryUpdate, DiaryWithPhotos, PhotoInDiary
+from app.utils.file_storage import save_user_photo
 
 
 async def get_or_create_diary(
@@ -303,3 +305,40 @@ async def update_diary(
 
     await db.commit()
     return await get_diary_by_id(db, user_id, diary_id)
+
+
+async def add_photos_to_diary(
+    db: AsyncSession,
+    user_id: UUID,
+    diary_id: int,
+    files: list[UploadFile],
+) -> list[int] | None:
+    """
+    기존 다이어리에 사진을 추가합니다.
+    소유자 검증 후 파일 저장 + Photo 생성, diary.photo_count 증가.
+    없거나 권한 없으면 None 반환.
+    """
+    stmt = select(Diary).where(
+        Diary.id == diary_id,
+        Diary.user_id == user_id,
+        Diary.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    diary = result.scalar_one_or_none()
+    if diary is None:
+        return None
+
+    new_photo_ids: list[int] = []
+    for file in files:
+        image_url = await save_user_photo(user_id, file)
+        photo = Photo(
+            diary_id=diary_id,
+            image_url=image_url,
+        )
+        db.add(photo)
+        await db.flush()
+        new_photo_ids.append(photo.id)
+        diary.photo_count += 1
+
+    await db.commit()
+    return new_photo_ids

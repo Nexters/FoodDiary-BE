@@ -4,12 +4,17 @@ from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
-from app.schemas.diary import DiaryUpdate, DiaryWithPhotos, PhotoInDiary
+from app.schemas.diary import (
+    AddDiaryPhotosResponse,
+    DiaryUpdate,
+    DiaryWithPhotos,
+    PhotoInDiary,
+)
 from app.services import diary_service
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -168,6 +173,45 @@ async def update_diary(
             detail="Diary not found or you don't have access.",
         )
     return diary
+
+
+@router.post(
+    "/{diary_id}/photos",
+    response_model=AddDiaryPhotosResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_diary_photos(
+    diary_id: int,
+    photos: Annotated[list[UploadFile], File(description="추가할 이미지 파일들")],
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    기존 다이어리에 사진 추가 (수정 화면에서 + 버튼).
+
+    multipart/form-data로 이미지 1장 이상. 새로 생성된 photo_id 목록 반환.
+    저장 시 PATCH의 photo_ids에 기존 id + 이 응답의 photo_ids를 넣으면 됨.
+    """
+    if not photos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No photos provided",
+        )
+    for photo in photos:
+        if not photo.content_type or not photo.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only image files are allowed.",
+            )
+    photo_ids = await diary_service.add_photos_to_diary(
+        db=db, user_id=user_id, diary_id=diary_id, files=photos
+    )
+    if photo_ids is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
+        )
+    return AddDiaryPhotosResponse(photo_ids=photo_ids)
 
 
 # ========================================
