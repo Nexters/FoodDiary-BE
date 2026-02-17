@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.diary import DiaryWithPhotos, PhotoInDiary
+from app.services import diary_service
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
@@ -105,14 +106,12 @@ async def get_diaries_by_date_range(
             detail="Date range must be within 31 days",
         )
 
-    # TODO: 실제 DB 조회 로직 구현
-    # 임시로 빈 응답 반환
-    result = {}
-    current = start_date
-    while current <= end_date:
-        result[current.isoformat()] = {"diaries": []}
-        current = date.fromordinal(current.toordinal() + 1)
-
+    result = await diary_service.get_diaries_by_date_range(
+        db=db,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
     return result
 
 
@@ -137,11 +136,15 @@ async def get_diary_by_id(
     if test_mode:
         return _get_mock_diary_detail(diary_id)
 
-    # TODO: 실제 DB 조회 로직 구현
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Diary {diary_id} not found",
+    diary = await diary_service.get_diary_by_id(
+        db=db, user_id=user_id, diary_id=diary_id
     )
+    if diary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access. Try re-login and use the new token.",
+        )
+    return diary
 
 
 # ========================================
