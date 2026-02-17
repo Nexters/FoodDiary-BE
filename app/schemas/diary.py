@@ -18,9 +18,7 @@ class DiaryBase(BaseModel):
     diary_date: date = Field(..., description="일기 날짜")
     time_type: TimeType = Field(..., description="끼니 종류")
     restaurant_name: str | None = Field(None, description="식당명")
-    restaurant_url: str | None = Field(
-        None, description="식당 URL (예: 카카오맵 링크)"
-    )
+    restaurant_url: str | None = Field(None, description="식당 URL (예: 카카오맵 링크)")
     road_address: str | None = Field(None, description="도로명 주소")
     category: str | None = Field(None, description="음식 카테고리")
     note: str | None = Field(None, description="메모")
@@ -76,9 +74,7 @@ class DiaryConfirm(BaseModel):
 
     restaurant_name: str = Field(..., description="확정된 식당명")
     category: str = Field(..., description="확정된 음식 카테고리")
-    restaurant_url: str | None = Field(
-        None, description="식당 URL (예: 카카오맵 링크)"
-    )
+    restaurant_url: str | None = Field(None, description="식당 URL (예: 카카오맵 링크)")
     road_address: str | None = Field(None, description="도로명 주소")
     note: str | None = Field(None, description="메모")
     tags: list[str] | None = Field(None, description="태그 리스트")
