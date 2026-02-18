@@ -73,6 +73,12 @@ async def _analyze_photo_data_internal(
                     "name": r["name"],
                     "confidence": 0.8,
                     "address": r["address"],
+                    "url": (
+                        f"https://place.map.kakao.com/{r['kakao_id']}"
+                        if r.get("kakao_id")
+                        else None
+                    ),
+                    "road_address": r.get("road_address", ""),
                 }
                 for r in nearby[:5]
             ]

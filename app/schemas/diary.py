@@ -114,8 +114,8 @@ class DiaryWithPhotos(DiaryResponse):
     GET /diaries/{date}에서 사용
     """
 
+    analysis_status: AnalysisStatus = Field(..., description="분석 상태")
     photos: list[PhotoInDiary] = Field(default=[], description="사진 목록")
-    analysis_status: AnalysisStatus = Field(..., description="전체 분석 상태")
 
 
 class DiariesByDateResponse(BaseModel):
@@ -143,6 +143,7 @@ class DiariesByDateResponse(BaseModel):
                         "tags": ["칼국수", "만두"],
                         "created_at": "2026-01-29T12:00:00Z",
                         "updated_at": "2026-01-29T12:00:00Z",
+                        "analysis_status": "done",
                         "photos": [
                             {
                                 "photo_id": 101,
@@ -150,7 +151,6 @@ class DiariesByDateResponse(BaseModel):
                                 "analysis_status": "done",
                             }
                         ],
-                        "analysis_status": "done",
                     }
                 ],
             }
@@ -172,6 +172,9 @@ class RestaurantCandidate(BaseModel):
     name: str = Field(..., description="식당명")
     confidence: float | None = Field(None, description="신뢰도 (0~1)", ge=0, le=1)
     address: str | None = Field(None, description="주소")
+    url: str | None = Field(None, description="식당 지도 URL")
+    road_address: str | None = Field(None, description="도로명 주소")
+    zone_no: str | None = Field(None, description="우편번호")
 
 
 class DiaryAnalysisResponse(BaseModel):
