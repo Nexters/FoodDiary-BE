@@ -103,7 +103,7 @@ class PhotoInDiary(BaseModel):
     """다이어리 조회 시 포함되는 사진 정보"""
 
     photo_id: int = Field(..., description="사진 ID")
-    full_image_url: str = Field(..., description="사진 URL")
+    image_url: str = Field(..., description="사진 URL")
     analysis_status: AnalysisStatus = Field(..., description="분석 상태")
 
 
@@ -114,6 +114,7 @@ class DiaryWithPhotos(DiaryResponse):
     GET /diaries/{date}에서 사용
     """
 
+    analysis_status: AnalysisStatus = Field(..., description="분석 상태")
     photos: list[PhotoInDiary] = Field(default=[], description="사진 목록")
 
 
@@ -142,10 +143,11 @@ class DiariesByDateResponse(BaseModel):
                         "tags": ["칼국수", "만두"],
                         "created_at": "2026-01-29T12:00:00Z",
                         "updated_at": "2026-01-29T12:00:00Z",
+                        "analysis_status": "done",
                         "photos": [
                             {
                                 "photo_id": 101,
-                                "full_image_url": "https://...",
+                                "image_url": "https://...",
                                 "analysis_status": "done",
                             }
                         ],
