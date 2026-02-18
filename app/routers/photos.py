@@ -46,7 +46,11 @@ async def batch_upload_photos_endpoint(
     동기 단계(EXIF 파싱, 파일 저장, DB 생성)를 완료하고 결과를 즉시 반환합니다.
     LLM 분석은 백그라운드에서 진행되며, 완료 시 FCM silent push로 알림을 전송합니다.
 
-    **test_mode=true:** 실제 파일 저장 및 DB 생성, LLM 분석만 mock 데이터로 대체
+    **백그라운드 분석 완료 시 FCM 데이터:**
+    - 성공: `{"type": "analysis_complete", "diary_date": "YYYY-MM-DD"}`
+    - 실패: `{"type": "analysis_failed", "diary_date": "YYYY-MM-DD"}`
+
+    **test_mode=true:** mock 데이터 즉시 응답 (LLM 호출 없음)
     """
     if test_mode:
         return _get_mock_batch_upload_response(len(photos))
