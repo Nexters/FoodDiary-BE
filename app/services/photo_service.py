@@ -130,6 +130,7 @@ async def _run_analysis_pipeline(
     sync_results: list[PhotoSyncResult],
     test_mode: bool = False,
 ) -> None:
+<<<<<<< HEAD
     """LLM 병렬 분석 (또는 mock) + 결과 저장 + DiaryAnalysis 집계 수행"""
     if test_mode:
         logger.info(f"Mock 분석 데이터 생성: {len(sync_results)}개 사진")
@@ -147,6 +148,18 @@ async def _run_analysis_pipeline(
             return_exceptions=True,
         )
         logger.info("LLM 분석 완료")
+=======
+    """LLM 병렬 분석 + 결과 저장 + DiaryAnalysis 집계 수행"""
+    logger.info(f"LLM 분석 시작: {len(sync_results)}개 사진")
+    analysis_results: list[AnalysisData | None | BaseException] = await asyncio.gather(
+        *[
+            analyze_photo_data(r.image_url, r.photo_id, r.taken_location)
+            for r in sync_results
+        ],
+        return_exceptions=True,
+    )
+    logger.info("LLM 분석 완료")
+>>>>>>> af868bf (test: 사진 업로드, 알림, 라우터, Kakao Map 테스트 추가)
 
     for result in analysis_results:
         if isinstance(result, AnalysisData):
