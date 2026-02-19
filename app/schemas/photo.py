@@ -161,6 +161,9 @@ class PhotoAnalysisResultResponse(BaseModel):
                         "name": "명동교자",
                         "confidence": 0.92,
                         "address": "서울시 중구 명동길 29",
+                        "url": "https://place.map.kakao.com/477096726",
+                        "road_address": "서울 중구 명동길 29",
+                        "zone_no": "04536",
                     }
                 ],
                 "menu_candidates": [

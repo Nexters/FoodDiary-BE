@@ -127,17 +127,22 @@ class DiaryWithPhotos(DiaryResponse):
     photos: list[PhotoInDiary] = Field(default=[], description="사진 목록")
 
 
+class DatePhotosEntry(BaseModel):
+    """캘린더 뷰 날짜별 사진 URL 목록"""
+
+    photos: list[str] = Field(default=[], description="해당 날짜의 사진 URL 목록")
+
+
 class DiariesByDateResponse(BaseModel):
     """
     날짜별 다이어리 목록 응답
 
-    GET /diaries/{date}
+    GET /diaries/daily
     """
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "query_date": "2026-01-29",
                 "diaries": [
                     {
                         "id": 12,
@@ -145,11 +150,14 @@ class DiariesByDateResponse(BaseModel):
                         "diary_date": "2026-01-29",
                         "time_type": "lunch",
                         "restaurant_name": "명동교자",
+                        "restaurant_url": "https://place.map.kakao.com/477096726",
+                        "road_address": "서울 중구 명동길 29",
                         "category": "한식",
                         "cover_photo_id": 101,
                         "cover_photo_url": "https://...",
                         "note": "칼국수 맛집",
                         "tags": ["칼국수", "만두"],
+                        "photo_count": 1,
                         "created_at": "2026-01-29T12:00:00Z",
                         "updated_at": "2026-01-29T12:00:00Z",
                         "analysis_status": "done",
@@ -166,7 +174,6 @@ class DiariesByDateResponse(BaseModel):
         }
     )
 
-    query_date: date = Field(..., description="조회한 날짜")
     diaries: list[DiaryWithPhotos] = Field(default=[], description="다이어리 목록")
 
 
@@ -202,6 +209,9 @@ class DiaryAnalysisResponse(BaseModel):
                         "name": "명동교자",
                         "confidence": 0.92,
                         "address": "서울시 중구 명동길 29",
+                        "url": "https://place.map.kakao.com/477096726",
+                        "road_address": "서울 중구 명동길 29",
+                        "zone_no": "04536",
                     }
                 ],
                 "category_candidates": ["한식", "분식"],

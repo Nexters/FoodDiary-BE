@@ -11,6 +11,8 @@ from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.diary import (
     AddDiaryPhotosResponse,
+    DatePhotosEntry,
+    DiariesByDateResponse,
     DiaryAnalysisResponse,
     DiaryUpdate,
     DiaryWithPhotos,
@@ -21,7 +23,7 @@ from app.services import diary_service
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
 
-@router.get("", response_model=dict[str, dict])
+@router.get("", response_model=dict[str, DatePhotosEntry])
 async def get_diaries_by_date_range(
     start_date_str: Annotated[
         str,
@@ -87,7 +89,7 @@ async def get_diaries_by_date_range(
     )
 
 
-@router.get("/daily", response_model=dict[str, list])
+@router.get("/daily", response_model=DiariesByDateResponse)
 async def get_diaries_by_date(
     date_str: Annotated[
         str,
