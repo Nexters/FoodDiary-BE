@@ -1,6 +1,6 @@
 """Diary 라우터"""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
+from app.models.diary import Diary
 from app.schemas.diary import (
     AddDiaryPhotosResponse,
     DatePhotosEntry,
@@ -35,20 +36,7 @@ DATE_RANGE_RESPONSE_EXAMPLE = {
 }
 
 
-@router.get(
-    "",
-    response_model=dict[str, DatePhotosEntry],
-    responses={
-        200: {
-            "description": "날짜별 사진 URL 목록 (키: YYYY-MM-DD, 값: photos 배열)",
-            "content": {
-                "application/json": {
-                    "example": DATE_RANGE_RESPONSE_EXAMPLE,
-                }
-            },
-        }
-    },
-)
+@router.get("", response_model=DiariesByDateResponse)
 async def get_diaries_by_date_range(
     start_date_str: Annotated[
         str,
@@ -65,14 +53,92 @@ async def get_diaries_by_date_range(
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
-    날짜 범위로 다이어리 사진 목록 조회 (캘린더 뷰용)
+    날짜 범위로 다이어리 상세 목록 조회
+
+    **파라미터:**
+    - `start_date`: 시작 날짜 (YYYY-MM-DD, 필수)
+    - `end_date`: 종료 날짜 (YYYY-MM-DD, 필수, start_date와 같으면 단일 날짜 조회)
+
+    **응답:**
+    - 해당 범위의 다이어리 목록 (사진, 분석 상태 등 전체 필드 포함)
+    - 최대 31일 범위 제한
+    """
+    if test_mode:
+        try:
+            start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            return _get_mock_daily_response(start)
+        except ValueError:
+            pass
+        return _get_mock_daily_response(date(2026, 2, 14))
+
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format. Use YYYY-MM-DD",
+        ) from err
+
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="start_date must be before or equal to end_date",
+        )
+
+    if (end_date - start_date).days > 31:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Date range must be within 31 days",
+        )
+
+    diaries = await diary_service.get_diaries_by_date_range(
+        db=db,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return {"diaries": [_build_diary_with_photos(d) for d in diaries]}
+
+
+@router.get(
+    "/summary",
+    response_model=dict[str, DatePhotosEntry],
+    responses={
+        200: {
+            "description": "날짜별 사진 URL 목록 (키: YYYY-MM-DD, 값: photos 배열)",
+            "content": {
+                "application/json": {
+                    "example": DATE_RANGE_RESPONSE_EXAMPLE,
+                }
+            },
+        }
+    },
+)
+async def get_diaries_summary_by_date_range(
+    start_date_str: Annotated[
+        str,
+        Query(alias="start_date", description="시작 날짜 (YYYY-MM-DD)"),
+    ],
+    end_date_str: Annotated[
+        str,
+        Query(alias="end_date", description="종료 날짜 (YYYY-MM-DD)"),
+    ],
+    test_mode: Annotated[
+        bool, Query(description="테스트 모드 (mock 데이터 반환)")
+    ] = False,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    날짜 범위로 다이어리 사진 URL 목록 조회 (캘린더 뷰용)
 
     **파라미터:**
     - `start_date`: 시작 날짜 (YYYY-MM-DD, 필수)
     - `end_date`: 종료 날짜 (YYYY-MM-DD, 필수)
 
     **응답:**
-    - 날짜별 사진 URL 목록
+    - 날짜별 사진 URL 목록만 반환
     - 다이어리가 없는 날짜도 빈 배열로 포함
     - 최대 31일 범위 제한
     """
@@ -106,56 +172,13 @@ async def get_diaries_by_date_range(
             detail="Date range must be within 31 days",
         )
 
-    return await diary_service.get_diaries_by_date_range(
+    diaries = await diary_service.get_diaries_by_date_range(
         db=db,
         user_id=user_id,
         start_date=start_date,
         end_date=end_date,
     )
-
-
-@router.get("/daily", response_model=DiariesByDateResponse)
-async def get_diaries_by_date(
-    date_str: Annotated[
-        str,
-        Query(alias="date", description="조회할 날짜 (YYYY-MM-DD)"),
-    ],
-    test_mode: Annotated[
-        bool, Query(description="테스트 모드 (mock 데이터 반환)")
-    ] = False,
-    db: AsyncSession = Depends(get_session),
-    user_id: UUID = Depends(get_current_user_id),
-):
-    """
-    특정 날짜의 다이어리 목록 조회 (일간 뷰용)
-
-    **파라미터:**
-    - `date`: 조회할 날짜 (YYYY-MM-DD, 필수)
-
-    **응답:**
-    - 해당 날짜의 다이어리 목록 (사진, 분석 상태 등 전체 필드 포함)
-    """
-    if test_mode:
-        try:
-            query_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            return _get_mock_daily_response(query_date)
-        except ValueError:
-            pass
-        return _get_mock_daily_response(date(2026, 2, 14))
-
-    try:
-        query_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid date format. Use YYYY-MM-DD",
-        ) from err
-
-    return await diary_service.get_diaries_by_date(
-        db=db,
-        user_id=user_id,
-        query_date=query_date,
-    )
+    return _build_date_photos_response(start_date, end_date, diaries)
 
 
 @router.get("/{diary_id}", response_model=DiaryWithPhotos)
@@ -303,6 +326,62 @@ async def delete_diary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Diary not found or you don't have access.",
         )
+
+
+# ========================================
+# 응답 변환 헬퍼 함수들
+# ========================================
+
+
+def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
+    status = diary.analysis_status or "done"
+    cover_photo_url = diary.cover_photo.image_url if diary.cover_photo else None
+    photos = [
+        PhotoInDiary(
+            photo_id=p.id,
+            image_url=p.image_url,
+            analysis_status=status,
+        )
+        for p in sorted(diary.photos, key=lambda x: x.id)
+    ]
+    return DiaryWithPhotos(
+        id=diary.id,
+        user_id=diary.user_id,
+        diary_date=diary.diary_date.date(),
+        time_type=diary.time_type,
+        analysis_status=status,
+        restaurant_name=diary.restaurant_name,
+        restaurant_url=diary.restaurant_url,
+        road_address=diary.road_address,
+        category=diary.category,
+        cover_photo_id=diary.cover_photo_id,
+        cover_photo_url=cover_photo_url,
+        note=diary.note,
+        tags=diary.tags or [],
+        photo_count=diary.photo_count,
+        created_at=diary.created_at,
+        updated_at=diary.updated_at,
+        photos=photos,
+    )
+
+
+def _build_date_photos_response(
+    start_date: date, end_date: date, diaries: list[Diary]
+) -> dict[str, dict]:
+    response: dict[str, dict] = {}
+    cur = start_date
+    while cur <= end_date:
+        response[cur.isoformat()] = {"photos": []}
+        cur = cur + timedelta(days=1)
+
+    for diary in diaries:
+        date_key = diary.diary_date.date().isoformat()
+        if date_key not in response:
+            response[date_key] = {"photos": []}
+        for p in sorted(diary.photos, key=lambda x: x.id):
+            response[date_key]["photos"].append(p.image_url)
+
+    return response
 
 
 # ========================================
