@@ -1,5 +1,6 @@
 """파일 저장 유틸리티"""
 
+import shutil
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -48,3 +49,10 @@ def save_file(filepath: Path | str, content: bytes) -> str:
     path.write_bytes(content)
 
     return str(path)
+
+
+def delete_user_storage(user_id: UUID) -> None:
+    """사용자의 스토리지 디렉토리를 삭제합니다."""
+    user_dir = STORAGE_DIR / str(user_id)
+    if user_dir.exists():
+        shutil.rmtree(user_dir)

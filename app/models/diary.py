@@ -60,6 +60,7 @@ class Diary(Base):
         "Photo",
         back_populates="diary",
         foreign_keys="Photo.diary_id",
+        passive_deletes=True,
     )
     cover_photo: Mapped["Photo | None"] = relationship(
         "Photo",
@@ -70,6 +71,7 @@ class Diary(Base):
         "DiaryAnalysis",
         back_populates="diary",
         uselist=False,
+        passive_deletes=True,
     )
 
     # 인덱스 정의 (main 브랜치의 인사이트 기능 유지)

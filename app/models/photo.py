@@ -44,6 +44,7 @@ class Photo(Base):
         "PhotoAnalysisResult",
         back_populates="photo",
         uselist=False,
+        passive_deletes=True,
     )
 
     def __repr__(self) -> str:

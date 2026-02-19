@@ -13,6 +13,7 @@ from app.routers import (
     insights_router,
     photos_router,
     restaurant_router,
+    users_router,
 )
 from app.services.fcm_sender import initialize_firebase
 
@@ -47,3 +48,4 @@ app.include_router(diaries_router)
 app.include_router(insights_router)
 app.include_router(photos_router)
 app.include_router(restaurant_router)
+app.include_router(users_router)

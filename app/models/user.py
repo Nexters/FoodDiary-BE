@@ -28,8 +28,12 @@ class User(Base, TimestampMixin):
     )
 
     # Relationships
-    diaries: Mapped[list["Diary"]] = relationship("Diary", back_populates="user")
-    devices: Mapped[list["Device"]] = relationship("Device", back_populates="user")
+    diaries: Mapped[list["Diary"]] = relationship(
+        "Diary", back_populates="user", passive_deletes=True
+    )
+    devices: Mapped[list["Device"]] = relationship(
+        "Device", back_populates="user", passive_deletes=True
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, provider={self.provider})>"
