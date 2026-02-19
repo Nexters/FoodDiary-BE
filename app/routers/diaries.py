@@ -23,7 +23,32 @@ from app.services import diary_service
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
 
-@router.get("", response_model=dict[str, DatePhotosEntry])
+DATE_RANGE_RESPONSE_EXAMPLE = {
+    "2026-01-15": {
+        "photos": [
+            "https://example.com/photos/1.jpg",
+            "https://example.com/photos/2.jpg",
+        ]
+    },
+    "2026-01-16": {"photos": []},
+    "2026-01-17": {"photos": ["https://example.com/photos/3.jpg"]},
+}
+
+
+@router.get(
+    "",
+    response_model=dict[str, DatePhotosEntry],
+    responses={
+        200: {
+            "description": "날짜별 사진 URL 목록 (키: YYYY-MM-DD, 값: photos 배열)",
+            "content": {
+                "application/json": {
+                    "example": DATE_RANGE_RESPONSE_EXAMPLE,
+                }
+            },
+        }
+    },
+)
 async def get_diaries_by_date_range(
     start_date_str: Annotated[
         str,
