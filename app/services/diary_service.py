@@ -80,10 +80,7 @@ async def get_diaries_by_date_range(
     end_date: date,
 ) -> dict[str, dict]:
     """
-    날짜 범위로 다이어리 목록을 조회합니다.
-
-    user_id + diary_date(범위) + deleted_at IS NULL 조건으로 조회하고,
-    날짜별로 그룹핑하여 반환합니다.
+    날짜 범위로 다이어리 사진 목록을 조회합니다. (캘린더 뷰용 간소화 형식)
 
     Args:
         db: 데이터베이스 세션
@@ -92,7 +89,7 @@ async def get_diaries_by_date_range(
         end_date: 종료 날짜 (포함)
 
     Returns:
-        { "YYYY-MM-DD": { "diaries": [...] }, ... }
+        { "YYYY-MM-DD": { "photos": ["url1", "url2", ...] }, ... }
         다이어리가 없는 날짜도 빈 배열로 포함합니다.
     """
     start_bound = datetime.combine(start_date, datetime.min.time(), tzinfo=UTC)
@@ -108,66 +105,99 @@ async def get_diaries_by_date_range(
             Diary.diary_date < end_bound,
             Diary.deleted_at.is_(None),
         )
-        .options(
-            selectinload(Diary.photos),
-            selectinload(Diary.cover_photo),
-        )
+        .options(selectinload(Diary.photos))
         .order_by(Diary.diary_date, Diary.time_type)
     )
     result = await db.execute(stmt)
     diaries = result.scalars().all()
 
-    # 날짜별 그룹핑용 빈 딕셔너리 생성 (다이어리 없는 날도 키 포함)
     response: dict[str, dict] = {}
     cur = start_date
     while cur <= end_date:
-        response[cur.isoformat()] = {"diaries": []}
+        response[cur.isoformat()] = {"photos": []}
         cur = cur + timedelta(days=1)
 
-    # 다이어리를 날짜별로 채움 (analysis_status NULL이면 "done"으로 처리)
     for diary in diaries:
         date_key = diary.diary_date.date().isoformat()
         if date_key not in response:
-            response[date_key] = {"diaries": []}
-
-        status = diary.analysis_status or "done"
-        cover_photo_url = None
-        if diary.cover_photo is not None:
-            cover_photo_url = diary.cover_photo.image_url
-
-        diary_date_str = diary.diary_date.date().isoformat()
-        photos = [
-            {
-                "photo_id": p.id,
-                "image_url": p.image_url,
-                "analysis_status": status,
-            }
-            for p in sorted(diary.photos, key=lambda x: x.id)
-        ]
-
-        response[date_key]["diaries"].append(
-            {
-                "id": diary.id,
-                "user_id": diary.user_id,
-                "diary_date": diary_date_str,
-                "time_type": diary.time_type,
-                "analysis_status": status,
-                "restaurant_name": diary.restaurant_name,
-                "restaurant_url": diary.restaurant_url,
-                "road_address": diary.road_address,
-                "category": diary.category,
-                "cover_photo_id": diary.cover_photo_id,
-                "cover_photo_url": cover_photo_url,
-                "note": diary.note,
-                "tags": diary.tags or [],
-                "photo_count": diary.photo_count,
-                "created_at": diary.created_at,
-                "updated_at": diary.updated_at,
-                "photos": photos,
-            }
-        )
+            response[date_key] = {"photos": []}
+        for p in sorted(diary.photos, key=lambda x: x.id):
+            response[date_key]["photos"].append(p.image_url)
 
     return response
+
+
+async def get_diaries_by_date(
+    db: AsyncSession,
+    user_id: UUID,
+    query_date: date,
+) -> dict:
+    """
+    특정 날짜의 다이어리 목록을 조회합니다. (일간 뷰용 상세 형식)
+
+    Args:
+        db: 데이터베이스 세션
+        user_id: 사용자 ID
+        query_date: 조회할 날짜
+
+    Returns:
+        { "diaries": [...DiaryWithPhotos...] }
+    """
+    start_bound = datetime.combine(query_date, datetime.min.time(), tzinfo=UTC)
+    end_bound = start_bound + timedelta(days=1)
+
+    stmt = (
+        select(Diary)
+        .where(
+            Diary.user_id == user_id,
+            Diary.diary_date >= start_bound,
+            Diary.diary_date < end_bound,
+            Diary.deleted_at.is_(None),
+        )
+        .options(
+            selectinload(Diary.photos),
+            selectinload(Diary.cover_photo),
+        )
+        .order_by(Diary.time_type)
+    )
+    result = await db.execute(stmt)
+    diaries = result.scalars().all()
+
+    diary_list = []
+    for diary in diaries:
+        status = diary.analysis_status or "done"
+        cover_photo_url = diary.cover_photo.image_url if diary.cover_photo else None
+        photos = [
+            PhotoInDiary(
+                photo_id=p.id,
+                image_url=p.image_url,
+                analysis_status=status,
+            )
+            for p in sorted(diary.photos, key=lambda x: x.id)
+        ]
+        diary_list.append(
+            DiaryWithPhotos(
+                id=diary.id,
+                user_id=diary.user_id,
+                diary_date=diary.diary_date.date(),
+                time_type=diary.time_type,
+                analysis_status=status,
+                restaurant_name=diary.restaurant_name,
+                restaurant_url=diary.restaurant_url,
+                road_address=diary.road_address,
+                category=diary.category,
+                cover_photo_id=diary.cover_photo_id,
+                cover_photo_url=cover_photo_url,
+                note=diary.note,
+                tags=diary.tags or [],
+                photo_count=diary.photo_count,
+                created_at=diary.created_at,
+                updated_at=diary.updated_at,
+                photos=photos,
+            )
+        )
+
+    return {"diaries": diary_list}
 
 
 async def get_diary_by_id(
