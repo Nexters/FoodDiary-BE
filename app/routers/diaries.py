@@ -4,30 +4,60 @@ from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
-from app.schemas.diary import DiaryWithPhotos, PhotoInDiary
+from app.schemas.diary import (
+    AddDiaryPhotosResponse,
+    DatePhotosEntry,
+    DiariesByDateResponse,
+    DiaryAnalysisResponse,
+    DiaryUpdate,
+    DiaryWithPhotos,
+    PhotoInDiary,
+)
+from app.services import diary_service
 
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
 
-@router.get("", response_model=dict[str, dict])
+DATE_RANGE_RESPONSE_EXAMPLE = {
+    "2026-01-15": {
+        "photos": [
+            "https://example.com/photos/1.jpg",
+            "https://example.com/photos/2.jpg",
+        ]
+    },
+    "2026-01-16": {"photos": []},
+    "2026-01-17": {"photos": ["https://example.com/photos/3.jpg"]},
+}
+
+
+@router.get(
+    "",
+    response_model=dict[str, DatePhotosEntry],
+    responses={
+        200: {
+            "description": "날짜별 사진 URL 목록 (키: YYYY-MM-DD, 값: photos 배열)",
+            "content": {
+                "application/json": {
+                    "example": DATE_RANGE_RESPONSE_EXAMPLE,
+                }
+            },
+        }
+    },
+)
 async def get_diaries_by_date_range(
-    date_str: Annotated[
-        str | None,
-        Query(alias="date", description="특정 날짜 조회 (YYYY-MM-DD)"),
-    ] = None,
     start_date_str: Annotated[
-        str | None,
+        str,
         Query(alias="start_date", description="시작 날짜 (YYYY-MM-DD)"),
-    ] = None,
+    ],
     end_date_str: Annotated[
-        str | None,
+        str,
         Query(alias="end_date", description="종료 날짜 (YYYY-MM-DD)"),
-    ] = None,
+    ],
     test_mode: Annotated[
         bool, Query(description="테스트 모드 (mock 데이터 반환)")
     ] = False,
@@ -35,85 +65,97 @@ async def get_diaries_by_date_range(
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
-    날짜 범위로 다이어리 목록 조회
+    날짜 범위로 다이어리 사진 목록 조회 (캘린더 뷰용)
 
-    **파라미터 조합:**
-    - `date`: 특정 날짜 조회 (YYYY-MM-DD)
-    - `start_date` + `end_date`: 기간 조회 (YYYY-MM-DD)
-
-    ⚠️ `date` 또는 `start_date + end_date` 중 하나는 필수
+    **파라미터:**
+    - `start_date`: 시작 날짜 (YYYY-MM-DD, 필수)
+    - `end_date`: 종료 날짜 (YYYY-MM-DD, 필수)
 
     **응답:**
-    - 날짜별로 그룹핑된 딕셔너리
+    - 날짜별 사진 URL 목록
     - 다이어리가 없는 날짜도 빈 배열로 포함
+    - 최대 31일 범위 제한
     """
-    # test_mode일 경우 mock 데이터 반환
     if test_mode:
-        # 날짜 파싱 (에러 처리 포함)
         try:
-            if date_str:
-                query_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                return _get_mock_diaries_response(query_date, query_date)
-            if start_date_str and end_date_str:
-                start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-                return _get_mock_diaries_response(start, end)
+            start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+            return _get_mock_date_range_response(start, end)
         except ValueError:
-            # 날짜 파싱 실패 시 기본 mock 데이터 반환
             pass
-        return _get_mock_diaries_response(date(2026, 1, 19), date(2026, 1, 19))
+        return _get_mock_date_range_response(date(2026, 2, 14), date(2026, 2, 16))
 
-    # 파라미터 검증
-    if date_str and (start_date_str or end_date_str):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot use 'date' with 'start_date' or 'end_date'",
-        )
-
-    if not date_str and not (start_date_str and end_date_str):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either 'date' or both 'start_date' and 'end_date' are required",
-        )
-
-    # 날짜 파싱
     try:
-        if date_str:
-            query_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            start_date = query_date
-            end_date = query_date
-        else:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
     except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid date format. Use YYYY-MM-DD",
         ) from err
 
-    # 날짜 범위 검증
     if start_date > end_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="start_date must be before or equal to end_date",
         )
 
-    # 최대 31일 제한
     if (end_date - start_date).days > 31:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Date range must be within 31 days",
         )
 
-    # TODO: 실제 DB 조회 로직 구현
-    # 임시로 빈 응답 반환
-    result = {}
-    current = start_date
-    while current <= end_date:
-        result[current.isoformat()] = {"diaries": []}
-        current = date.fromordinal(current.toordinal() + 1)
+    return await diary_service.get_diaries_by_date_range(
+        db=db,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
-    return result
+
+@router.get("/daily", response_model=DiariesByDateResponse)
+async def get_diaries_by_date(
+    date_str: Annotated[
+        str,
+        Query(alias="date", description="조회할 날짜 (YYYY-MM-DD)"),
+    ],
+    test_mode: Annotated[
+        bool, Query(description="테스트 모드 (mock 데이터 반환)")
+    ] = False,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    특정 날짜의 다이어리 목록 조회 (일간 뷰용)
+
+    **파라미터:**
+    - `date`: 조회할 날짜 (YYYY-MM-DD, 필수)
+
+    **응답:**
+    - 해당 날짜의 다이어리 목록 (사진, 분석 상태 등 전체 필드 포함)
+    """
+    if test_mode:
+        try:
+            query_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            return _get_mock_daily_response(query_date)
+        except ValueError:
+            pass
+        return _get_mock_daily_response(date(2026, 2, 14))
+
+    try:
+        query_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format. Use YYYY-MM-DD",
+        ) from err
+
+    return await diary_service.get_diaries_by_date(
+        db=db,
+        user_id=user_id,
+        query_date=query_date,
+    )
 
 
 @router.get("/{diary_id}", response_model=DiaryWithPhotos)
@@ -137,11 +179,130 @@ async def get_diary_by_id(
     if test_mode:
         return _get_mock_diary_detail(diary_id)
 
-    # TODO: 실제 DB 조회 로직 구현
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Diary {diary_id} not found",
+    diary = await diary_service.get_diary_by_id(
+        db=db, user_id=user_id, diary_id=diary_id
     )
+    if diary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
+        )
+    return diary
+
+
+@router.get("/{diary_id}/suggestions", response_model=DiaryAnalysisResponse)
+async def get_diary_suggestions(
+    diary_id: int,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    다이어리 분석 제안 조회 (식당, 카테고리, 메뉴 후보)
+
+    "이 식당을 찾고 계신가요?" 화면에서 사용
+    DiaryAnalysis의 restaurant_candidates, category_candidates, menu_candidates 반환
+    """
+    analysis = await diary_service.get_diary_analysis(
+        db=db, user_id=user_id, diary_id=diary_id
+    )
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis not found or diary doesn't exist.",
+        )
+    return analysis
+
+
+@router.patch("/{diary_id}", response_model=DiaryWithPhotos)
+async def update_diary(
+    diary_id: int,
+    body: DiaryUpdate,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    다이어리 수정 (수정 화면 "저장").
+
+    전달된 필드만 반영. photo_ids가 있으면 해당 ID만 유지·순서 반영, 나머지 사진 삭제.
+    """
+    diary = await diary_service.update_diary(
+        db=db, user_id=user_id, diary_id=diary_id, body=body
+    )
+    if diary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
+        )
+    return diary
+
+
+@router.post(
+    "/{diary_id}/photos",
+    response_model=AddDiaryPhotosResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_diary_photos(
+    diary_id: int,
+    photos: Annotated[list[UploadFile], File(description="추가할 이미지 파일들")],
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    기존 다이어리에 사진 추가 (수정 화면에서 + 버튼).
+
+    multipart/form-data로 이미지 1장 이상. 새로 생성된 photo_id 목록 반환.
+    저장 시 PATCH의 photo_ids에 기존 id + 이 응답의 photo_ids를 넣으면 됨.
+
+    **제한사항:**
+    - 다이어리당 최대 10개의 사진만 업로드 가능
+    """
+    if not photos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No photos provided",
+        )
+    for photo in photos:
+        if not photo.content_type or not photo.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only image files are allowed.",
+            )
+    try:
+        photo_ids = await diary_service.add_photos_to_diary(
+            db=db, user_id=user_id, diary_id=diary_id, files=photos
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    if photo_ids is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
+        )
+    return AddDiaryPhotosResponse(photo_ids=photo_ids)
+
+
+@router.delete("/{diary_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_diary(
+    diary_id: int,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    다이어리 전체 삭제 (수정 화면 "삭제" 버튼).
+    소프트 삭제(deleted_at 설정). 소유자만 가능.
+    """
+    deleted = await diary_service.delete_diary(
+        db=db, user_id=user_id, diary_id=diary_id
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
+        )
 
 
 # ========================================
@@ -149,143 +310,148 @@ async def get_diary_by_id(
 # ========================================
 
 
-def _get_mock_diaries_response(start_date: date, end_date: date) -> dict[str, dict]:
-    """mock 다이어리 목록 응답 생성 (날짜 범위 기반)"""
-    mock_user_id = UUID("e435a643-a6c8-49ab-b14f-6dc4ae5af7be")
-
+def _get_mock_date_range_response(start_date: date, end_date: date) -> dict[str, dict]:
+    """범위 조회 mock 응답 생성 - 날짜별 사진 URL 목록만 반환"""
     result = {}
     current = start_date
 
-    # 날짜 범위만큼 반복
     while current <= end_date:
         date_str = current.isoformat()
-
-        # 특정 날짜에만 다이어리 데이터 생성 (랜덤하게)
-        # 날짜의 일(day)을 기준으로 패턴 생성
         day = current.day
 
-        if day % 3 == 1:  # 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31일
-            # 점심 + 저녁 2개
-            # 19일과 25일은 processing 상태로
-            is_processing = day in [19, 25]
-
+        if day % 3 == 1:  # 점심 2장 + 저녁 3장
             result[date_str] = {
-                "diaries": [
-                    {
-                        "id": day * 10,
-                        "user_id": mock_user_id,
-                        "diary_date": date_str,
-                        "time_type": "lunch",
-                        "analysis_status": "processing" if is_processing else "done",
-                        "restaurant_name": None if is_processing else "명동교자",
-                        "restaurant_url": (
-                            None
-                            if is_processing
-                            else "https://place.map.kakao.com/477096726"
-                        ),
-                        "road_address": (
-                            None if is_processing else "서울 중구 명동길 29"
-                        ),
-                        "category": None if is_processing else "한식",
-                        "cover_photo_id": day * 10 + 1,
-                        "cover_photo_url": f"https://picsum.photos/seed/lunch{day}/400/300",
-                        "note": None if is_processing else "칼국수가 정말 맛있었다",
-                        "tags": [] if is_processing else ["칼국수", "만두"],
-                        "photo_count": 2,
-                        "created_at": f"{date_str}T12:00:00",
-                        "updated_at": f"{date_str}T12:05:30",
-                        "photos": [
-                            {
-                                "photo_id": day * 10 + 1,
-                                "image_url": f"https://picsum.photos/seed/photo{day}a/400/300",
-                                "analysis_status": (
-                                    "processing" if is_processing else "done"
-                                ),
-                            },
-                            {
-                                "photo_id": day * 10 + 2,
-                                "image_url": f"https://picsum.photos/seed/photo{day}b/400/300",
-                                "analysis_status": (
-                                    "processing" if is_processing else "done"
-                                ),
-                            },
-                        ],
-                    },
-                    {
-                        "id": day * 10 + 5,
-                        "user_id": mock_user_id,
-                        "diary_date": date_str,
-                        "time_type": "dinner",
-                        "analysis_status": "done",
-                        "restaurant_name": "스시히로바",
-                        "restaurant_url": "https://place.map.kakao.com/12345678",
-                        "road_address": "서울 강남구 테헤란로 152",
-                        "category": "일식",
-                        "cover_photo_id": day * 10 + 6,
-                        "cover_photo_url": f"https://picsum.photos/seed/dinner{day}/400/300",
-                        "note": "신선한 회가 일품",
-                        "tags": ["사시미", "라멘"],
-                        "photo_count": 3,
-                        "created_at": f"{date_str}T19:00:00",
-                        "updated_at": f"{date_str}T19:10:00",
-                        "photos": [
-                            {
-                                "photo_id": day * 10 + 6,
-                                "image_url": f"https://picsum.photos/seed/photo{day}c/400/300",
-                                "analysis_status": "done",
-                            },
-                            {
-                                "photo_id": day * 10 + 7,
-                                "image_url": f"https://picsum.photos/seed/photo{day}d/400/300",
-                                "analysis_status": "done",
-                            },
-                            {
-                                "photo_id": day * 10 + 8,
-                                "image_url": f"https://picsum.photos/seed/photo{day}e/400/300",
-                                "analysis_status": "done",
-                            },
-                        ],
-                    },
+                "photos": [
+                    f"https://picsum.photos/seed/photo{day}a/400/300",
+                    f"https://picsum.photos/seed/photo{day}b/400/300",
+                    f"https://picsum.photos/seed/photo{day}c/400/300",
+                    f"https://picsum.photos/seed/photo{day}d/400/300",
+                    f"https://picsum.photos/seed/photo{day}e/400/300",
                 ]
             }
-        elif day % 3 == 2:  # 2, 5, 8, 11, 14, 17, 20, 23, 26, 29일
-            # 아침만 1개
+        elif day % 3 == 2:  # 아침 1장
             result[date_str] = {
-                "diaries": [
-                    {
-                        "id": day * 10,
-                        "user_id": mock_user_id,
-                        "diary_date": date_str,
-                        "time_type": "breakfast",
-                        "analysis_status": "done",
-                        "restaurant_name": "투썸플레이스",
-                        "restaurant_url": "https://place.map.kakao.com/23456789",
-                        "road_address": "서울 마포구 월드컵북로 396",
-                        "category": "카페",
-                        "cover_photo_id": day * 10 + 1,
-                        "cover_photo_url": f"https://picsum.photos/seed/breakfast{day}/400/300",
-                        "note": "커피 한 잔의 여유",
-                        "tags": ["아메리카노", "크로와상"],
-                        "photo_count": 1,
-                        "created_at": f"{date_str}T08:30:00",
-                        "updated_at": f"{date_str}T08:32:00",
-                        "photos": [
-                            {
-                                "photo_id": day * 10 + 1,
-                                "image_url": f"https://picsum.photos/seed/photo{day}f/400/300",
-                                "analysis_status": "done",
-                            }
-                        ],
-                    }
+                "photos": [
+                    f"https://picsum.photos/seed/photo{day}f/400/300",
                 ]
             }
-        else:  # 3, 6, 9, 12, 15, 18, 21, 24, 27, 30일
-            # 빈 날짜
-            result[date_str] = {"diaries": []}
+        else:  # 빈 날짜
+            result[date_str] = {"photos": []}
 
         current = date.fromordinal(current.toordinal() + 1)
 
     return result
+
+
+def _get_mock_daily_response(query_date: date) -> dict:
+    """일간 조회 mock 응답 생성 - 해당 날짜의 다이어리 목록 전체 필드 반환"""
+    mock_user_id = UUID("e435a643-a6c8-49ab-b14f-6dc4ae5af7be")
+    date_str = query_date.isoformat()
+    day = query_date.day
+
+    if day % 3 == 1:
+        is_processing = day in [19, 25]
+        diaries = [
+            {
+                "id": day * 10,
+                "user_id": mock_user_id,
+                "diary_date": date_str,
+                "time_type": "lunch",
+                "analysis_status": "processing" if is_processing else "done",
+                "restaurant_name": None if is_processing else "명동교자",
+                "restaurant_url": (
+                    None if is_processing else "https://place.map.kakao.com/477096726"
+                ),
+                "road_address": None if is_processing else "서울 중구 명동길 29",
+                "category": None if is_processing else "한식",
+                "cover_photo_id": day * 10 + 1,
+                "cover_photo_url": f"https://picsum.photos/seed/lunch{day}/400/300",
+                "note": None if is_processing else "칼국수가 정말 맛있었다",
+                "tags": [] if is_processing else ["칼국수", "만두"],
+                "photo_count": 2,
+                "created_at": f"{date_str}T12:00:00",
+                "updated_at": f"{date_str}T12:05:30",
+                "photos": [
+                    {
+                        "photo_id": day * 10 + 1,
+                        "image_url": f"https://picsum.photos/seed/photo{day}a/400/300",
+                        "analysis_status": "processing" if is_processing else "done",
+                    },
+                    {
+                        "photo_id": day * 10 + 2,
+                        "image_url": f"https://picsum.photos/seed/photo{day}b/400/300",
+                        "analysis_status": "processing" if is_processing else "done",
+                    },
+                ],
+            },
+            {
+                "id": day * 10 + 5,
+                "user_id": mock_user_id,
+                "diary_date": date_str,
+                "time_type": "dinner",
+                "analysis_status": "done",
+                "restaurant_name": "스시히로바",
+                "restaurant_url": "https://place.map.kakao.com/12345678",
+                "road_address": "서울 강남구 테헤란로 152",
+                "category": "일식",
+                "cover_photo_id": day * 10 + 6,
+                "cover_photo_url": f"https://picsum.photos/seed/dinner{day}/400/300",
+                "note": "신선한 회가 일품",
+                "tags": ["사시미", "라멘"],
+                "photo_count": 3,
+                "created_at": f"{date_str}T19:00:00",
+                "updated_at": f"{date_str}T19:10:00",
+                "photos": [
+                    {
+                        "photo_id": day * 10 + 6,
+                        "image_url": f"https://picsum.photos/seed/photo{day}c/400/300",
+                        "analysis_status": "done",
+                    },
+                    {
+                        "photo_id": day * 10 + 7,
+                        "image_url": f"https://picsum.photos/seed/photo{day}d/400/300",
+                        "analysis_status": "done",
+                    },
+                    {
+                        "photo_id": day * 10 + 8,
+                        "image_url": f"https://picsum.photos/seed/photo{day}e/400/300",
+                        "analysis_status": "done",
+                    },
+                ],
+            },
+        ]
+    elif day % 3 == 2:
+        diaries = [
+            {
+                "id": day * 10,
+                "user_id": mock_user_id,
+                "diary_date": date_str,
+                "time_type": "breakfast",
+                "analysis_status": "done",
+                "restaurant_name": "투썸플레이스",
+                "restaurant_url": "https://place.map.kakao.com/23456789",
+                "road_address": "서울 마포구 월드컵북로 396",
+                "category": "카페",
+                "cover_photo_id": day * 10 + 1,
+                "cover_photo_url": f"https://picsum.photos/seed/breakfast{day}/400/300",
+                "note": "커피 한 잔의 여유",
+                "tags": ["아메리카노", "크로와상"],
+                "photo_count": 1,
+                "created_at": f"{date_str}T08:30:00",
+                "updated_at": f"{date_str}T08:32:00",
+                "photos": [
+                    {
+                        "photo_id": day * 10 + 1,
+                        "image_url": f"https://picsum.photos/seed/photo{day}f/400/300",
+                        "analysis_status": "done",
+                    }
+                ],
+            }
+        ]
+    else:
+        diaries = []
+
+    return {"diaries": diaries}
 
 
 def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:

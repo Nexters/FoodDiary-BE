@@ -1,36 +1,3 @@
-# **API 설계 변경사항 (2026-02-12)**
-
-## **주요 변경사항**
-
-### **1. 비동기 분석 처리 + FCM 푸시 도입**
-
-기존: 동기 방식 (5-10초 대기)
-→ 변경: 비동기 방식 (1-2초 즉시 응답 + FCM 푸시)
-
-### **2. Diary 테이블에 analysis_status 필드 추가**
-
-- `processing`: 분석 중
-- `done`: 분석 완료
-- `failed`: 분석 실패
-
-### **3. API 엔드포인트 변경**
-
-- `POST /photos/batch-upload`: 즉시 응답 (분석은 백그라운드)
-- `GET /diaries/{diary_id}`: 새로 추가 (다이어리 ID로 단일 조회)
-- `GET /diaries?date=...`: 기존 유지 (날짜 범위로 조회)
-
-### **4. 프론트 호출 흐름**
-
-```
-1. POST /photos/batch-upload (즉시 응답)
-2. 화면에 "분석 중..." 표시
-3. FCM 푸시 수신 (diary_id 포함)
-4. GET /diaries/{diary_id} 조회
-5. 분석 결과 표시
-```
-
----
-
 # **현재 서비스 플로우 요약 (비동기 분석 + FCM 푸시)**
 
 ```
@@ -92,40 +59,47 @@
 - 사진이 하나만 올라갈 수도, 여러 개 올라갈 수도 있음
 - 사진을 올리기 전에도 생성 가능
 
-| **필드**        | **설명**                                                       |
-| --------------- | -------------------------------------------------------------- |
-| id              | PK                                                             |
-| user_id         | 작성자                                                         |
-| diary_date      | 2024-01-17 형태                                                |
-| time_type       | 아침 / 점심 / 저녁 / 간식                                      |
-| analysis_status | processing(분석중) / done(완료) / failed(실패)                 |
-| restaurant_name | 유저가 최종 확정한 식당명                                      |
-| restaurant_url  | 식당 URL (예: 카카오맵 링크 https://place.map.kakao.com/xxxxx) |
-| road_address    | 도로명 주소 (예: 서울 중구 명동길 29)                          |
-| category        | 유저가 최종 확정한 음식 카테고리                               |
-| cover_photo_id  | 대표 썸네일 사진                                               |
-| note            | 메모 (필요하면)                                                |
-| tags            | 다이어리에 최종적으로 보여질 태그(일단 사진들의 음식명 리스트) |
-| photo_count     | 다이어리에 포함된 사진의 수                                    |
-| created_at      |                                                                |
-| updated_at      |                                                                |
-| deleted_at      |                                                                |
+| **필드**                             | **설명**                                                       |
+| ------------------------------------ | -------------------------------------------------------------- |
+| id                                   | PK                                                             |
+| user_id                              | 작성자                                                         |
+| diary_date                           | 2024-01-17 형태                                                |
+| time_type                            | 아침 / 점심 / 저녁 / 간식                                      |
+| analysis_status                      | processing(분석중) / done(완료) / failed(실패)                 |
+| restaurant_name                      | 자동 확정된 식당명 (DiaryAnalysis의 첫 번째 후보)              |
+| restaurant_url                       | 식당 URL (예: 카카오맵 링크 https://place.map.kakao.com/xxxxx) |
+| road_address                         | 도로명 주소 (예: 서울 중구 명동길 29)                          |
+| detail_address(TODO: 현재 DB에 없음) | 상세 주소 (예: 2층 김밥천국) — 층·상호 등                      |
+| category                             | 자동 확정된 음식 카테고리 (DiaryAnalysis의 첫 번째 후보)       |
+| cover_photo_id                       | 대표 썸네일 사진                                               |
+| note                                 | 메모 (필요하면)                                                |
+| tags                                 | 다이어리에 최종적으로 보여질 태그(일단 사진들의 음식명 리스트) |
+| photo_count                          | 다이어리에 포함된 사진의 수                                    |
+| created_at                           |                                                                |
+| updated_at                           |                                                                |
+| deleted_at                           |                                                                |
+
+**제약조건 (Constraints):**
+
+- **Partial Unique Index**: `unique_user_date_time_active`
+  - `(user_id, diary_date, time_type) WHERE deleted_at IS NULL`
+  - 소프트 삭제된 레코드는 제외하고 유니크 제약 적용
+  - 같은 유저가 같은 날짜·시간대에 여러 다이어리를 생성할 수 없음 (삭제되지 않은 것만)
 
 ---
 
 ### **3.DiaryAnalysis**
 
-- 다이어리 하나에 대한 추론 결과
-- 아직 유저가 확정하지 않은 “AI 추정” 상태
-- 후보 리스트 형태일 수 있음
-
-| **필드**              | **설명** |
-| --------------------- | -------- |
-| diary_id              | PK, FK   |
-| restaurant_candidates | JSON     |
-| category_candidates   | JSON     |
-| menu_candidates       | JSON     |
-| created_at            |          |
+- 다이어리 하나에 대한 AI 분석 결과 (후보 목록)
+- 분석 완료 시 **가장 확률 높은 후보**(첫 번째)가 자동으로 Diary에 확정됨
+- 유저는 `GET /diaries/{diary_id}/suggestions`로 다른 후보를 조회하여 변경 가능
+  | **필드** | **설명** |
+  | --------------------- | -------- |
+  | diary_id | PK, FK |
+  | restaurant_candidates | JSON |
+  | category_candidates | JSON |
+  | menu_candidates | JSON |
+  | created_at | |
 
 ---
 
@@ -134,13 +108,14 @@
 - 업로드한 사진 하나 = 하나의 Photo 레코드
 - 사진 단위로 분석 결과를 독립적으로 가짐
 
-| **필드**       | **설명**              |
-| -------------- | --------------------- |
-| id             | PK                    |
-| diary_id       | 해당 사진이 속한 일기 |
-| image_url      | S3 저장 주소          |
-| taken_at       | EXIF 시간             |
-| taken_location | GPS 좌표              |
+| **필드**       | **설명**                          |
+| -------------- | --------------------------------- |
+| id             | PK                                |
+| diary_id       | 해당 사진이 속한 일기             |
+| image_url      | S3 저장 주소                      |
+| display_order  | 표시 순서 (0부터, 수정 화면 순서) |
+| taken_at       | EXIF 시간                         |
+| taken_location | GPS 좌표                          |
 
 ---
 
@@ -269,9 +244,17 @@ Authorization: Bearer <token>
 | date     | string   | ✅       | 대상 날짜 (YYYY-MM-DD) |
 | photos   | file[]   | ✅       | 이미지 파일들 (다중)   |
 
+**Query Parameters**
+
+| **파라미터** | **타입** | **필수** | **설명**                                                   |
+| ------------ | -------- | -------- | ---------------------------------------------------------- |
+| test_mode    | boolean  | 아니오   | 테스트 모드 (기본값: false). LLM 분석을 mock 데이터로 대체 |
+
 ---
 
 ### **Response (즉시 응답)**
+
+**일반 모드 (test_mode=false 또는 생략):**
 
 ```json
 {
@@ -294,11 +277,39 @@ Authorization: Bearer <token>
 }
 ```
 
+**테스트 모드 (test_mode=true):**
+
+```json
+{
+  "results": [
+    {
+      "photo_id": 19,
+      "diary_id": 2,
+      "time_type": "dinner",
+      "image_url": "data/photos/22a85dba-9ad1-4c87-9fa8-26cd5aefe096.JPG",
+      "analysis_status": "done"
+    },
+    {
+      "photo_id": 20,
+      "diary_id": 2,
+      "time_type": "dinner",
+      "image_url": "data/photos/abc123.JPG",
+      "analysis_status": "done"
+    }
+  ]
+}
+```
+
 > 📌 **응답 특징**
 >
 > - 즉시 응답 (1-2초 이내)
-> - 파일 저장 및 Diary 생성만 완료된 상태
-> - `analysis_status: "processing"` - AI 분석은 백그라운드에서 진행 중
+> - 파일 저장 및 Diary 생성 완료
+> - **일반 모드 (test_mode=false)**:
+>   - `analysis_status: "processing"` - AI 분석은 백그라운드에서 진행 중
+>   - 분석 완료 시 FCM 푸시 전송 및 자동 확정
+> - **테스트 모드 (test_mode=true)**:
+>   - `analysis_status: "done"` - mock 데이터로 즉시 분석 완료
+>   - Diary에 자동 확정 (restaurant_name, category, tags 등)
 
 ---
 
@@ -423,11 +434,18 @@ Authorization: Bearer <token>
 │                                    │                                        │
 │                                    ▼                                        │
 │  ╔═══════════════════════════════════════════════════════════════════════╗  │
-│  ║  5단계: 상태 업데이트 + FCM 푸시                                       ║  │
+│  ║  5단계: 자동 확정 + 상태 업데이트 + FCM 푸시                           ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                       ║  │
-│  ║   1. Diary.analysis_status = "done" 업데이트                          ║  │
-│  ║   2. FCM 푸시 전송                                                    ║  │
+│  ║   1. DiaryAnalysis에서 가장 확률 높은 후보를 Diary에 자동 설정        ║  │
+│  ║      └─ restaurant_name: 첫 번째 식당 후보                            ║  │
+│  ║      └─ restaurant_url: 첫 번째 식당 URL                              ║  │
+│  ║      └─ road_address: 첫 번째 식당 주소                               ║  │
+│  ║      └─ category: 첫 번째 카테고리 후보                               ║  │
+│  ║      └─ tags: 메뉴 후보들 (최대 5개)                                  ║  │
+│  ║                                                                       ║  │
+│  ║   2. Diary.analysis_status = "done" 업데이트                          ║  │
+│  ║   3. FCM 푸시 전송                                                    ║  │
 │  ║      └─ { diary_id, action: "diary_analysis_complete" }               ║  │
 │  ║                                                                       ║  │
 │  ║   ※ 실패 시: analysis_status = "failed"                               ║  │
@@ -971,53 +989,206 @@ GET /diaries/12
 > 1. FCM 푸시로 `diary_id` 수신
 > 2. `GET /diaries/{diary_id}`로 상세 조회
 > 3. `analysis_status: "done"` 확인 후 데이터 표시
+>
+> 수정 화면 진입 시에도 동일 API 사용. 응답에 `detail_address`, 사진별 `display_order` 포함 권장.
 
 ---
 
-## **📆 4. 다이어리 분석 후보 조회 (선택 화면용)**
+## **📆 4. 다이어리 수정 (PUT/PATCH)**
 
-### **GET /diaries/{diary_id}/analysis**
+### **PUT /diaries/{diary_id}** 또는 **PATCH /diaries/{diary_id}**
 
-> “이 식당 맞나요?” 화면에서만 사용
+> 수정 화면에서 "저장" 시 호출. 사진 추가/삭제/순서, 카테고리, 주소, 태그 등 편집 내용 반영.
+
+**Path Parameters**
+
+| **파라미터** | **타입** | **필수** | **설명**    |
+| ------------ | -------- | -------- | ----------- |
+| diary_id     | integer  | ✅       | 다이어리 ID |
+
+**Request Body (부분 업데이트 시 PATCH, 전체 덮어쓰기 시 PUT)**
+
+```json
+{
+  "category": "한식",
+  "restaurant_name": "김밥천국",
+  "restaurant_url": "https://place.map.kakao.com/...",
+  "road_address": "서울특별시 성동구 광나루로 4가길 12-7",
+  "detail_address": "2층 김밥천국",
+  "tags": ["집밥", "중식", "튀김", "소면"],
+  "note": "메모 내용",
+  "cover_photo_id": 101,
+  "photo_ids": [101, 102, 103]
+}
+```
+
+| **필드**        | **타입**  | **필수** | **설명**                                                           |
+| --------------- | --------- | -------- | ------------------------------------------------------------------ |
+| category        | string    | 아니오   | 음식 카테고리 (한식/중식/양식/집밥 등)                             |
+| restaurant_name | string    | 아니오   | 식당명                                                             |
+| restaurant_url  | string    | 아니오   | 식당 URL (카카오맵 등)                                             |
+| road_address    | string    | 아니오   | 도로명 주소                                                        |
+| detail_address  | string    | 아니오   | 상세 주소 (층·상호)                                                |
+| tags            | string[]  | 아니오   | 태그 목록 (교체)                                                   |
+| note            | string    | 아니오   | 메모                                                               |
+| cover_photo_id  | integer   | 아니오   | 대표 사진 ID                                                       |
+| photo_ids       | integer[] | 아니오   | 사진 ID 목록 (순서 = 표시 순서, 포함된 ID만 유지·나머지 삭제 처리) |
+
+- **사진 처리:** `photo_ids`에 포함되지 않은 기존 사진은 다이어리에서 제거(또는 soft unlink). 새 사진 추가는 별도 업로드 API 호출 후 `photo_ids`에 ID 포함.
+- **권한:** 해당 다이어리의 소유자만 수정 가능. 403 Forbidden 처리.
+
+**Response (200 OK):** 수정된 다이어리 상세와 동일한 형태 (GET /diaries/{diary_id} 응답 스키마 재사용).
+
+---
+
+## **📆 5. 다이어리 삭제**
+
+### **DELETE /diaries/{diary_id}**
+
+> 수정 화면에서 "삭제" 버튼 시 호출.
+
+**Path Parameters**
+
+| **파라미터** | **타입** | **필수** | **설명**    |
+| ------------ | -------- | -------- | ----------- |
+| diary_id     | integer  | ✅       | 다이어리 ID |
+
+- **동작:** 소프트 삭제 시 `deleted_at` 설정. 하드 삭제 시 Diary 및 연관 Photo 등 삭제 (정책에 따라 선택).
+- **권한:** 해당 다이어리의 소유자만 삭제 가능. 403 Forbidden.
+
+**Response:** 204 No Content (성공 시 본문 없음).
+
+---
+
+## **📆 6. 식당 검색 (수정 화면 주소/식당 검색)**
+
+### **GET /restaurant/search**
+
+> "검색어를 입력해주세요", "이 식당을 찾고 계신가요?" 화면에서 사용. feat/search-restaurant 브랜치 구현 기준.
+
+**Query Parameters**
+
+| **파라미터** | **타입** | **필수** | **설명**                                                                                        |
+| ------------ | -------- | -------- | ----------------------------------------------------------------------------------------------- |
+| keyword      | string   | 아니오   | 음식점 이름(검색어). 있으면 카카오 키워드 검색 호출                                             |
+| diary_id     | integer  | 아니오   | 다이어리 ID. keyword 없을 때만 사용 시 해당 다이어리의 DiaryAnalysis.restaurant_candidates 조회 |
+| page         | integer  | 아니오   | 페이지 번호 (1~45, 기본값 1)                                                                    |
+| size         | integer  | 아니오   | 페이지당 결과 수 (1~15, 기본값 15)                                                              |
+
+- **동작:** `keyword`가 있으면 카카오 키워드 기반 음식점 검색. `keyword` 없이 `diary_id`만 있으면 해당 다이어리의 분석 후보(DiaryAnalysis.restaurant_candidates)를 반환. 둘 다 없으면 빈 결과.
+
+**Response (RestaurantSearchResponse)**
+
+```json
+{
+  "restaurants": [
+    {
+      "name": "김밥천국",
+      "road_address": "서울특별시 성동구 광나루로 4가길 12-7 1층",
+      "url": "https://place.map.kakao.com/..."
+    },
+    {
+      "name": "김밥지옥",
+      "road_address": "서울특별시 성동구 광나루로 4가길 12-7",
+      "url": "https://place.map.kakao.com/..."
+    }
+  ],
+  "total_count": 2,
+  "page": 1,
+  "size": 15,
+  "is_end": true
+}
+```
+
+| **필드**    | **타입** | **설명**                              |
+| ----------- | -------- | ------------------------------------- |
+| restaurants | array    | 음식점 목록 (name, road_address, url) |
+| total_count | integer  | 총 음식점 수                          |
+| page        | integer  | 현재 페이지                           |
+| size        | integer  | 페이지 크기                           |
+| is_end      | boolean  | 마지막 페이지 여부                    |
+
+- 카카오 로컬 API(키워드 검색) 연동. Kakao Map API 응답에 도로명 주소·식당 URL 포함하여 매핑.
+
+---
+
+## **📆 7. 다이어리 분석 제안 조회 (선택 화면용)**
+
+### **GET /diaries/{diary_id}/suggestions**
+
+> "이 식당을 찾고 계신가요?" 화면에서 사용
+>
+> 📌 **DiaryAnalysis 테이블에서 조회**
+>
+> - 분석 시 생성된 모든 후보 목록 반환
+> - 유저가 다른 식당/카테고리를 선택할 때 사용
+> - 이미 자동 확정된 상태이므로, 변경 시 PATCH /diaries/{diary_id} 사용
 
 ```json
 {
   "restaurant_candidates": [
-    { "name": "명동교자", "confidence": 0.92, "address": "서울 중구 명동..." }
+    {
+      "name": "명동교자",
+      "confidence": 0.92,
+      "address": "서울 중구 명동길 29",
+      "url": "https://place.map.kakao.com/477096726"
+    },
+    {
+      "name": "명동칼국수",
+      "confidence": 0.85,
+      "address": "서울 중구 명동2가 54-1",
+      "url": "https://place.map.kakao.com/..."
+    }
   ],
-  "category_candidates": ["한식"],
-  "menu_candidates": ["칼국수", "만두"]
+  "category_candidates": ["한식", "분식"],
+  "menu_candidates": ["칼국수", "만두", "비빔국수"]
 }
 ```
 
-## **📆 5. 다이어리 확정 (유저 선택 저장)**
+> 📌 **DiaryAnalysis 테이블에서 조회**
+>
+> - 분석 시 생성된 모든 후보 목록 반환
+> - 유저가 다른 식당/카테고리를 선택할 때 사용
+> - 이미 자동 확정된 상태이므로, 변경 시 PATCH /diaries/{diary_id} 사용
 
-### **POST /diaries/{diary_id}/confirm**
+---
 
-```json
-{
-  "restaurant_name": "명동교자",
-  "category": "한식"
-}
-```
+## **📆 8. 자동 확정 (Analysis → Diary)**
 
-**Response (성공 시):**
+> ⚠️ **업로드 시 자동으로 확정됨**
+>
+> 분석 완료 후 DiaryAnalysis의 **가장 확률 높은 후보**(첫 번째)가 자동으로 Diary에 설정됩니다.
 
-```json
-{
-  "diary_id": 12,
-  "restaurant_name": "명동교자",
-  "restaurant_url": "https://place.map.kakao.com/477096726",
-  "road_address": "서울 중구 명동길 29",
-  "category": "한식"
-}
-```
+**자동 확정 필드:**
 
-- 최초 확정
-- 재수정
-- 덮어쓰기 전부 여기서
+| **Diary 필드**  | **설정 값**                      |
+| --------------- | -------------------------------- |
+| restaurant_name | restaurant_candidates[0].name    |
+| restaurant_url  | restaurant_candidates[0].url     |
+| road_address    | restaurant_candidates[0].address |
+| category        | category_candidates[0]           |
+| tags            | menu_candidates (최대 5개)       |
+| analysis_status | "done"                           |
 
-➡️ 별도 PUT / PATCH 필요 없음
+**유저가 변경하려면:**
+
+- `GET /diaries/{diary_id}/suggestions`로 다른 후보 조회
+- `PATCH /diaries/{diary_id}`로 원하는 필드 수정
+
+---
+
+## **📆 9. ~~다이어리 확정 API (더 이상 필요 없음)~~**
+
+> ⚠️ **이 API는 더 이상 필요하지 않습니다**
+>
+> 이유: 분석 완료 시 자동 확정되므로, 별도 confirm API 불필요
+>
+> 대신 사용:
+>
+> - **PATCH /diaries/{diary_id}**: 식당/카테고리/태그 등 수정
+> - **GET /diaries/{diary_id}/suggestions**: 다른 후보 조회
+
+**~~POST /diaries/{diary_id}/confirm~~ (삭제됨)**
 
 ## **🧠 프론트 실제 호출 흐름 (비동기 + FCM 방식)**
 
@@ -1047,15 +1218,16 @@ GET /diaries/12
    └─ analysis_status: "done" 확인
    └─ 분석 결과 표시
 
-8. (필요시) 후보 조회 - "이 식당 맞나요?" 화면
-   └─ GET /diaries/2/analysis
+8. (선택) 다른 후보 조회 - "이 식당을 찾고 계신가요?" 화면
+   └─ GET /diaries/2/suggestions
    └─ restaurant_candidates, category_candidates, menu_candidates 표시
+   └─ 다른 식당을 선택하려면 PATCH /diaries/2로 수정
 
-9. 최종 확정
-   └─ POST /diaries/2/confirm
-   └─ { restaurant_name, category }
+9. (선택) 다이어리 수정
+   └─ PATCH /diaries/2
+   └─ { restaurant_name, category, tags, note 등 }
 
-10. 확정 후 목록 갱신
+10. 수정 후 목록 갱신
     └─ GET /diaries?date=...
     └─ 또는 GET /diaries/2 (단일 조회)
 ```
@@ -1081,9 +1253,11 @@ GET /diaries/12
    → { diary_id: 2, action: "diary_analysis_complete" }
 
 2. GET /diaries/2
-   → 응답: analysis_status: "done", restaurant_name: "명동교자"
+   → 응답: analysis_status: "done"
+   → 자동 확정: restaurant_name: "명동교자", category: "한식", tags: ["칼국수", "만두"]
 
-3. 프론트: 분석 결과 표시
+3. 프론트: 자동 확정된 결과 표시
+   - 유저가 다른 식당으로 변경하고 싶으면 GET /diaries/2/suggestions 호출
 ```
 
 #### **시나리오 3: 앱 재진입 시**

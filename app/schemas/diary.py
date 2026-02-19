@@ -23,7 +23,9 @@ class DiaryBase(BaseModel):
     category: str | None = Field(None, description="음식 카테고리")
     note: str | None = Field(None, description="메모")
     tags: list[str] = Field(default=[], description="태그 리스트")
-    photo_count: int = Field(default=0, description="포함된 사진 수", ge=0)
+    photo_count: int = Field(
+        default=0, description="포함된 사진 수 (최대 10개)", ge=0, le=10
+    )
 
 
 # ======================
@@ -40,15 +42,16 @@ class DiaryCreate(BaseModel):
 
 
 class DiaryUpdate(BaseModel):
-    """Diary 업데이트 스키마"""
+    """다이어리 수정 요청 스키마 (PATCH /diaries/{diary_id})"""
 
+    category: str | None = None
     restaurant_name: str | None = None
     restaurant_url: str | None = None
     road_address: str | None = None
-    category: str | None = None
-    cover_photo_id: int | None = None
-    note: str | None = None
     tags: list[str] | None = None
+    note: str | None = None
+    cover_photo_id: int | None = None
+    photo_ids: list[int] | None = None
 
 
 class DiaryConfirm(BaseModel):
@@ -92,7 +95,7 @@ class DiaryResponse(DiaryBase):
     user_id: UUID = Field(..., description="작성자 ID")
     cover_photo_id: int | None = Field(None, description="대표 사진 ID")
     cover_photo_url: str | None = Field(None, description="대표 사진 URL")
-    photo_count: int = Field(..., description="포함된 사진 수", ge=0)
+    photo_count: int = Field(..., description="포함된 사진 수 (최대 10개)", ge=0, le=10)
     created_at: datetime = Field(..., description="생성 시각")
     updated_at: datetime = Field(..., description="수정 시각")
 
@@ -107,6 +110,12 @@ class PhotoInDiary(BaseModel):
     analysis_status: AnalysisStatus = Field(..., description="분석 상태")
 
 
+class AddDiaryPhotosResponse(BaseModel):
+    """기존 다이어리에 사진 추가 시 응답 (POST /diaries/{diary_id}/photos)"""
+
+    photo_ids: list[int] = Field(..., description="새로 생성된 사진 ID 목록")
+
+
 class DiaryWithPhotos(DiaryResponse):
     """
     사진 목록을 포함한 다이어리 응답
@@ -118,17 +127,22 @@ class DiaryWithPhotos(DiaryResponse):
     photos: list[PhotoInDiary] = Field(default=[], description="사진 목록")
 
 
+class DatePhotosEntry(BaseModel):
+    """캘린더 뷰 날짜별 사진 URL 목록"""
+
+    photos: list[str] = Field(default=[], description="해당 날짜의 사진 URL 목록")
+
+
 class DiariesByDateResponse(BaseModel):
     """
     날짜별 다이어리 목록 응답
 
-    GET /diaries/{date}
+    GET /diaries/daily
     """
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "query_date": "2026-01-29",
                 "diaries": [
                     {
                         "id": 12,
@@ -136,11 +150,14 @@ class DiariesByDateResponse(BaseModel):
                         "diary_date": "2026-01-29",
                         "time_type": "lunch",
                         "restaurant_name": "명동교자",
+                        "restaurant_url": "https://place.map.kakao.com/477096726",
+                        "road_address": "서울 중구 명동길 29",
                         "category": "한식",
                         "cover_photo_id": 101,
                         "cover_photo_url": "https://...",
                         "note": "칼국수 맛집",
                         "tags": ["칼국수", "만두"],
+                        "photo_count": 1,
                         "created_at": "2026-01-29T12:00:00Z",
                         "updated_at": "2026-01-29T12:00:00Z",
                         "analysis_status": "done",
@@ -157,7 +174,6 @@ class DiariesByDateResponse(BaseModel):
         }
     )
 
-    query_date: date = Field(..., description="조회한 날짜")
     diaries: list[DiaryWithPhotos] = Field(default=[], description="다이어리 목록")
 
 
@@ -193,6 +209,9 @@ class DiaryAnalysisResponse(BaseModel):
                         "name": "명동교자",
                         "confidence": 0.92,
                         "address": "서울시 중구 명동길 29",
+                        "url": "https://place.map.kakao.com/477096726",
+                        "road_address": "서울 중구 명동길 29",
+                        "zone_no": "04536",
                     }
                 ],
                 "category_candidates": ["한식", "분식"],

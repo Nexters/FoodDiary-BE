@@ -77,11 +77,11 @@ class PhotoResponse(PhotoBase):
 
 class PhotoUploadResult(BaseModel):
     """
-    사진 업로드 결과 (비동기 방식)
+    사진 업로드 결과
 
-    POST /photos/batch-upload 즉시 응답
-    - 파일 저장 및 Diary 생성만 완료
-    - 분석은 백그라운드에서 진행 (analysis_status: "processing")
+    POST /photos/batch-upload 응답
+    - 일반 모드: 파일 저장 및 Diary 생성만 완료 (analysis_status: "processing")
+    - test_mode: 분석 결과도 포함하여 즉시 응답 (analysis_status: "done")
     """
 
     model_config = ConfigDict(
@@ -161,6 +161,9 @@ class PhotoAnalysisResultResponse(BaseModel):
                         "name": "명동교자",
                         "confidence": 0.92,
                         "address": "서울시 중구 명동길 29",
+                        "url": "https://place.map.kakao.com/477096726",
+                        "road_address": "서울 중구 명동길 29",
+                        "zone_no": "04536",
                     }
                 ],
                 "menu_candidates": [

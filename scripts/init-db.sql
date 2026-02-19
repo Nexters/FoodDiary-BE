@@ -56,9 +56,7 @@ CREATE TABLE IF NOT EXISTS diaries (
     photo_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP,
-    
-    CONSTRAINT unique_user_date_time UNIQUE (user_id, diary_date, time_type)
+    deleted_at TIMESTAMP
 );
 
 -- Diaries 테이블 인덱스
@@ -66,6 +64,11 @@ CREATE INDEX IF NOT EXISTS idx_diaries_user_date
     ON diaries(user_id, diary_date DESC);
 CREATE INDEX IF NOT EXISTS idx_diaries_user_id 
     ON diaries(user_id);
+
+-- Partial unique index: 소프트 삭제되지 않은 레코드만 유니크 제약
+CREATE UNIQUE INDEX IF NOT EXISTS unique_user_date_time_active 
+    ON diaries(user_id, diary_date, time_type) 
+    WHERE deleted_at IS NULL;
 
 -- Diaries 테이블 컬럼 설명
 COMMENT ON COLUMN diaries.restaurant_url IS '식당 URL (예: 카카오맵 링크 https://place.map.kakao.com/xxxxx)';
