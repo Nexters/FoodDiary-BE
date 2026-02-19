@@ -5,6 +5,7 @@ from app.routers.health import router as health_router
 from app.routers.insights import router as insights_router
 from app.routers.photos import router as photos_router
 from app.routers.restaurant import router as restaurant_router
+from app.routers.users import router as users_router
 
 __all__ = [
     "auth_router",
@@ -14,4 +15,5 @@ __all__ = [
     "insights_router",
     "photos_router",
     "restaurant_router",
+    "users_router",
 ]
