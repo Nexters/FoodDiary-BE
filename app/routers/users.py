@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
-from app.services.user import delete_user
+from app.services.user_service import delete_user
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
