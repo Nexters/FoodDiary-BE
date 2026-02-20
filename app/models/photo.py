@@ -47,6 +47,10 @@ class Photo(Base):
         passive_deletes=True,
     )
 
+    def get_full_url(self, base_url: str) -> str:
+        path = self.image_url.removeprefix("storage/")
+        return f"{base_url}/{path}"
+
     def __repr__(self) -> str:
         return f"<Photo(id={self.id}, diary_id={self.diary_id})>"
 

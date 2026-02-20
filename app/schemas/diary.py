@@ -154,7 +154,6 @@ class DiariesByDateResponse(BaseModel):
                         "road_address": "서울 중구 명동길 29",
                         "category": "한식",
                         "cover_photo_id": 101,
-                        "cover_photo_url": "https://...",
                         "note": "칼국수 맛집",
                         "tags": ["칼국수", "만두"],
                         "photo_count": 1,

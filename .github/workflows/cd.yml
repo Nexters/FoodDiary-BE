@@ -67,5 +67,6 @@ jobs:
               -e GOOGLE_REDIRECT_URI="${{ secrets.GOOGLE_REDIRECT_URI }}" \
               -e FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
               -e KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
+              -e IMAGE_BASE_URL="${{ secrets.IMAGE_BASE_URL }}" \
               --restart unless-stopped \
               ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}

@@ -107,40 +107,20 @@ class PhotoUploadResult(BaseModel):
 
 class BatchUploadResponse(BaseModel):
     """
-    배치 업로드 응답 (비동기 방식)
+    배치 업로드 즉시 응답 (비동기 처리)
 
     POST /photos/batch-upload
-    - 즉시 응답 (1-2초)
-    - 분석은 백그라운드에서 진행
-    - FCM 푸시로 완료 알림
+    분석 결과는 FCM silent push로 전송됩니다.
     """
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "results": [
-                    {
-                        "photo_id": 19,
-                        "diary_id": 2,
-                        "time_type": "dinner",
-                        "image_url": (
-                            "data/photos/22a85dba-9ad1-4c87-9fa8-26cd5aefe096.JPG"
-                        ),
-                        "analysis_status": "processing",
-                    },
-                    {
-                        "photo_id": 20,
-                        "diary_id": 2,
-                        "time_type": "dinner",
-                        "image_url": "data/photos/abc123.JPG",
-                        "analysis_status": "processing",
-                    },
-                ]
-            }
-        }
+    message: str = Field(
+        default="Upload received, analysis in progress",
+        description="처리 상태 메시지",
     )
-
-    results: list[PhotoUploadResult] = Field(..., description="업로드 결과 목록")
+    results: list[PhotoUploadResult] = Field(
+        default=[],
+        description="업로드된 사진 목록 (analysis_status: processing)",
+    )
 
 
 class PhotoAnalysisResultResponse(BaseModel):

@@ -84,6 +84,11 @@ class Diary(Base):
         ),
     )
 
+    def get_cover_photo_url(self, base_url: str) -> str | None:
+        if self.cover_photo is None:
+            return None
+        return self.cover_photo.get_full_url(base_url)
+
     def __repr__(self) -> str:
         return (
             f"<Diary(id={self.id}, user_id={self.user_id}, "

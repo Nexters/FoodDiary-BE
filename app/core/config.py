@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     APPLE_JWK_URL: str = "https://appleid.apple.com/auth/keys"
     APPLE_BASE_URL: str = "https://appleid.apple.com"
 
+    # Image URL 설정
+    IMAGE_BASE_URL: str = ""
+
     # JWT Settings
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
