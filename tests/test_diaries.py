@@ -23,10 +23,10 @@ class TestGetDiaries:
     @pytest.mark.asyncio
     async def test_get_diaries_by_single_date(self, test_client, test_db_session):
         """
-        단일 날짜로 다이어리 조회 (일간 조회 API)
+        단일 날짜로 다이어리 조회
 
         Given: 특정 날짜에 다이어리 1개 존재
-        When: GET /diaries/daily?date=2026-01-19 호출
+        When: GET /diaries?start_date=2026-01-19&end_date=2026-01-19 호출
         Then: 해당 날짜의 다이어리 반환
         """
         # Given: 사용자 생성
@@ -52,9 +52,9 @@ class TestGetDiaries:
         # Given: JWT 토큰 생성
         token = create_access_token(str(user.id), user.provider)
 
-        # When: GET /diaries/daily 호출 (일간 조회)
+        # When: GET /diaries 호출 (일간 조회)
         response = await test_client.get(
-            "/diaries/daily?date=2026-01-19",
+            "/diaries?start_date=2026-01-19&end_date=2026-01-19",
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -75,10 +75,10 @@ class TestGetDiaries:
     @pytest.mark.asyncio
     async def test_get_diaries_by_date_range(self, test_client, test_db_session):
         """
-        날짜 범위로 다이어리 사진 목록 조회 (범위 조회 API)
+        날짜 범위로 다이어리 사진 목록 조회 (캘린더 뷰용)
 
         Given: 여러 날짜에 다이어리 존재
-        When: GET /diaries?start_date=2026-01-15&end_date=2026-01-20 호출
+        When: GET /diaries/summary?start_date=2026-01-15&end_date=2026-01-20 호출
         Then: 해당 범위의 모든 날짜 반환 (날짜별 photos URL 목록, 빈 날짜 포함)
         """
         # Given: 사용자 생성
@@ -105,9 +105,9 @@ class TestGetDiaries:
         # Given: JWT 토큰 생성
         token = create_access_token(str(user.id), user.provider)
 
-        # When: GET /diaries 호출 (범위 조회)
+        # When: GET /diaries/summary 호출 (범위 조회)
         response = await test_client.get(
-            "/diaries?start_date=2026-01-15&end_date=2026-01-20",
+            "/diaries/summary?start_date=2026-01-15&end_date=2026-01-20",
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -138,7 +138,7 @@ class TestGetDiaries:
         잘못된 날짜 형식으로 조회 시 400 에러
 
         Given: 유효한 사용자
-        When: GET /diaries/daily?date=invalid-date 호출
+        When: GET /diaries?start_date=invalid-date&end_date=2026-01-19 호출
         Then: 400 Bad Request
         """
         # Given: 사용자 생성
@@ -149,9 +149,9 @@ class TestGetDiaries:
 
         token = create_access_token(str(user.id), user.provider)
 
-        # When: 잘못된 날짜 형식으로 일간 조회 호출
+        # When: 잘못된 날짜 형식으로 조회 호출
         response = await test_client.get(
-            "/diaries/daily?date=invalid-date",
+            "/diaries?start_date=invalid-date&end_date=2026-01-19",
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -178,7 +178,7 @@ class TestGetDiaries:
 
         # When: 32일 범위로 호출
         response = await test_client.get(
-            "/diaries?start_date=2026-01-01&end_date=2026-02-02",
+            "/diaries/summary?start_date=2026-01-01&end_date=2026-02-02",
             headers={"Authorization": f"Bearer {token}"},
         )
 
