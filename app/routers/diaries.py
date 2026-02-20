@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.models.diary import Diary
@@ -335,11 +336,11 @@ async def delete_diary(
 
 def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
     status = diary.analysis_status or "done"
-    cover_photo_url = diary.cover_photo.image_url if diary.cover_photo else None
+    cover_photo_url = diary.get_cover_photo_url(settings.IMAGE_BASE_URL)
     photos = [
         PhotoInDiary(
             photo_id=p.id,
-            image_url=p.image_url,
+            image_url=p.get_full_url(settings.IMAGE_BASE_URL),
             analysis_status=status,
         )
         for p in sorted(diary.photos, key=lambda x: x.id)
@@ -379,7 +380,7 @@ def _build_date_photos_response(
         if date_key not in response:
             response[date_key] = {"photos": []}
         for p in sorted(diary.photos, key=lambda x: x.id):
-            response[date_key]["photos"].append(p.image_url)
+            response[date_key]["photos"].append(p.get_full_url(settings.IMAGE_BASE_URL))
 
     return response
 

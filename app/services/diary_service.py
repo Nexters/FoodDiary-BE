@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.models import Diary, Photo
 from app.models.diary import DiaryAnalysis
 from app.schemas.diary import (
@@ -151,15 +152,13 @@ async def get_diary_by_id(
         return None
 
     status = diary.analysis_status or "done"
-    cover_photo_url = None
-    if diary.cover_photo is not None:
-        cover_photo_url = diary.cover_photo.image_url
+    cover_photo_url = diary.get_cover_photo_url(settings.IMAGE_BASE_URL)
 
     diary_date_only = diary.diary_date.date()
     photos = [
         PhotoInDiary(
             photo_id=p.id,
-            image_url=p.image_url,
+            image_url=p.get_full_url(settings.IMAGE_BASE_URL),
             analysis_status=status,
         )
         for p in sorted(diary.photos, key=lambda x: x.id)

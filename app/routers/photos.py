@@ -18,6 +18,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.photo import BatchUploadResponse, PhotoUploadResult
@@ -82,7 +83,7 @@ async def batch_upload_photos_endpoint(
             photo_id=r.photo_id,
             diary_id=r.diary_id,
             time_type=r.time_type,
-            image_url=r.image_url,
+            image_url=f"{settings.IMAGE_BASE_URL}/{r.image_url.removeprefix('storage/')}",
             analysis_status="processing",
         )
         for r in sync_results
