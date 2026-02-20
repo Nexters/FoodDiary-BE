@@ -66,10 +66,10 @@ async def get_diaries_by_date_range(
     if test_mode:
         try:
             start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            return _get_mock_daily_response(start)
+            end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
         except ValueError:
-            pass
-        return _get_mock_daily_response(date(2026, 2, 14))
+            return {"diaries": []}
+        return _get_mock_diaries_response(start, end)
 
     try:
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -388,161 +388,133 @@ def _build_date_photos_response(
 # Mock 데이터 생성 함수들
 # ========================================
 
+_MOCK_USER_ID = UUID("e435a643-a6c8-49ab-b14f-6dc4ae5af7be")
+
+# (name, map_url, address, category, tags)
+_MOCK_RESTAURANTS = [
+    (
+        "명동교자",
+        "https://place.map.kakao.com/477096726",
+        "서울 중구 명동길 29",
+        "한식",
+        ["칼국수", "만두"],
+    ),
+    (
+        "스시히로바",
+        "https://place.map.kakao.com/12345678",
+        "서울 강남구 테헤란로 152",
+        "일식",
+        ["사시미", "라멘"],
+    ),
+    (
+        "투썸플레이스",
+        "https://place.map.kakao.com/23456789",
+        "서울 마포구 월드컵북로 396",
+        "카페",
+        ["아메리카노", "크로와상"],
+    ),
+    (
+        "버거킹",
+        "https://place.map.kakao.com/34567890",
+        "서울 종로구 종로 1",
+        "패스트푸드",
+        ["와퍼", "감자튀김"],
+    ),
+    (
+        "봉피양",
+        "https://place.map.kakao.com/45678901",
+        "서울 서초구 서초대로 396",
+        "한식",
+        ["평양냉면", "불고기"],
+    ),
+]
+
+_MOCK_TIME_TYPES = ["breakfast", "lunch", "dinner", "snack"]
+
+# bucket(seed % 5) → 사진 수 (0 = 빈 날짜)
+_BUCKET_TO_PHOTO_COUNT = [0, 1, 2, 3, 5]
+
+
+def _mock_photos(seed: int, count: int, base_id: int) -> list[PhotoInDiary]:
+    return [
+        PhotoInDiary(
+            photo_id=base_id + i,
+            image_url=f"https://picsum.photos/seed/{seed}{chr(97 + i)}/400/300",
+            analysis_status="done",
+        )
+        for i in range(count)
+    ]
+
+
+def _get_mock_diaries_response(start_date: date, end_date: date) -> dict:
+    """GET /diaries test_mode용 mock 응답 - DiariesByDateResponse 구조"""
+    diaries = []
+    current = start_date
+    diary_id = int(current.strftime("%Y%m%d")) % 1000
+
+    while current <= end_date:
+        seed = int(current.strftime("%Y%m%d"))
+        photo_count = _BUCKET_TO_PHOTO_COUNT[seed % 5]
+
+        if photo_count > 0:
+            name, url, address, category, tags = _MOCK_RESTAURANTS[
+                seed % len(_MOCK_RESTAURANTS)
+            ]
+            time_type = _MOCK_TIME_TYPES[seed % len(_MOCK_TIME_TYPES)]
+            photos = _mock_photos(seed, photo_count, diary_id * 10)
+            noon = datetime(current.year, current.month, current.day, 12, 0)
+            diaries.append(
+                DiaryWithPhotos(
+                    id=diary_id,
+                    user_id=_MOCK_USER_ID,
+                    diary_date=current,
+                    time_type=time_type,
+                    analysis_status="done",
+                    restaurant_name=name,
+                    restaurant_url=url,
+                    road_address=address,
+                    category=category,
+                    cover_photo_id=diary_id * 10,
+                    cover_photo_url=f"https://picsum.photos/seed/{seed}a/400/300",
+                    note=None,
+                    tags=tags,
+                    photo_count=photo_count,
+                    created_at=noon,
+                    updated_at=noon,
+                    photos=photos,
+                )
+            )
+
+        diary_id += 1
+        current = date.fromordinal(current.toordinal() + 1)
+
+    return {"diaries": diaries}
+
 
 def _get_mock_date_range_response(start_date: date, end_date: date) -> dict[str, dict]:
-    """범위 조회 mock 응답 생성 - 날짜별 사진 URL 목록만 반환"""
+    """GET /diaries/summary test_mode용 mock 응답 - 날짜별 사진 URL 목록만 반환"""
     result = {}
     current = start_date
 
     while current <= end_date:
-        date_str = current.isoformat()
-        day = current.day
-
-        if day % 3 == 1:  # 점심 2장 + 저녁 3장
-            result[date_str] = {
-                "photos": [
-                    f"https://picsum.photos/seed/photo{day}a/400/300",
-                    f"https://picsum.photos/seed/photo{day}b/400/300",
-                    f"https://picsum.photos/seed/photo{day}c/400/300",
-                    f"https://picsum.photos/seed/photo{day}d/400/300",
-                    f"https://picsum.photos/seed/photo{day}e/400/300",
-                ]
-            }
-        elif day % 3 == 2:  # 아침 1장
-            result[date_str] = {
-                "photos": [
-                    f"https://picsum.photos/seed/photo{day}f/400/300",
-                ]
-            }
-        else:  # 빈 날짜
-            result[date_str] = {"photos": []}
-
+        seed = int(current.strftime("%Y%m%d"))
+        photo_count = _BUCKET_TO_PHOTO_COUNT[seed % 5]
+        photos = [
+            f"https://picsum.photos/seed/{seed}{chr(97 + i)}/400/300"
+            for i in range(photo_count)
+        ]
+        result[current.isoformat()] = {"photos": photos}
         current = date.fromordinal(current.toordinal() + 1)
 
     return result
 
 
-def _get_mock_daily_response(query_date: date) -> dict:
-    """일간 조회 mock 응답 생성 - 해당 날짜의 다이어리 목록 전체 필드 반환"""
-    mock_user_id = UUID("e435a643-a6c8-49ab-b14f-6dc4ae5af7be")
-    date_str = query_date.isoformat()
-    day = query_date.day
-
-    if day % 3 == 1:
-        is_processing = day in [19, 25]
-        diaries = [
-            {
-                "id": day * 10,
-                "user_id": mock_user_id,
-                "diary_date": date_str,
-                "time_type": "lunch",
-                "analysis_status": "processing" if is_processing else "done",
-                "restaurant_name": None if is_processing else "명동교자",
-                "restaurant_url": (
-                    None if is_processing else "https://place.map.kakao.com/477096726"
-                ),
-                "road_address": None if is_processing else "서울 중구 명동길 29",
-                "category": None if is_processing else "한식",
-                "cover_photo_id": day * 10 + 1,
-                "cover_photo_url": f"https://picsum.photos/seed/lunch{day}/400/300",
-                "note": None if is_processing else "칼국수가 정말 맛있었다",
-                "tags": [] if is_processing else ["칼국수", "만두"],
-                "photo_count": 2,
-                "created_at": f"{date_str}T12:00:00",
-                "updated_at": f"{date_str}T12:05:30",
-                "photos": [
-                    {
-                        "photo_id": day * 10 + 1,
-                        "image_url": f"https://picsum.photos/seed/photo{day}a/400/300",
-                        "analysis_status": "processing" if is_processing else "done",
-                    },
-                    {
-                        "photo_id": day * 10 + 2,
-                        "image_url": f"https://picsum.photos/seed/photo{day}b/400/300",
-                        "analysis_status": "processing" if is_processing else "done",
-                    },
-                ],
-            },
-            {
-                "id": day * 10 + 5,
-                "user_id": mock_user_id,
-                "diary_date": date_str,
-                "time_type": "dinner",
-                "analysis_status": "done",
-                "restaurant_name": "스시히로바",
-                "restaurant_url": "https://place.map.kakao.com/12345678",
-                "road_address": "서울 강남구 테헤란로 152",
-                "category": "일식",
-                "cover_photo_id": day * 10 + 6,
-                "cover_photo_url": f"https://picsum.photos/seed/dinner{day}/400/300",
-                "note": "신선한 회가 일품",
-                "tags": ["사시미", "라멘"],
-                "photo_count": 3,
-                "created_at": f"{date_str}T19:00:00",
-                "updated_at": f"{date_str}T19:10:00",
-                "photos": [
-                    {
-                        "photo_id": day * 10 + 6,
-                        "image_url": f"https://picsum.photos/seed/photo{day}c/400/300",
-                        "analysis_status": "done",
-                    },
-                    {
-                        "photo_id": day * 10 + 7,
-                        "image_url": f"https://picsum.photos/seed/photo{day}d/400/300",
-                        "analysis_status": "done",
-                    },
-                    {
-                        "photo_id": day * 10 + 8,
-                        "image_url": f"https://picsum.photos/seed/photo{day}e/400/300",
-                        "analysis_status": "done",
-                    },
-                ],
-            },
-        ]
-    elif day % 3 == 2:
-        diaries = [
-            {
-                "id": day * 10,
-                "user_id": mock_user_id,
-                "diary_date": date_str,
-                "time_type": "breakfast",
-                "analysis_status": "done",
-                "restaurant_name": "투썸플레이스",
-                "restaurant_url": "https://place.map.kakao.com/23456789",
-                "road_address": "서울 마포구 월드컵북로 396",
-                "category": "카페",
-                "cover_photo_id": day * 10 + 1,
-                "cover_photo_url": f"https://picsum.photos/seed/breakfast{day}/400/300",
-                "note": "커피 한 잔의 여유",
-                "tags": ["아메리카노", "크로와상"],
-                "photo_count": 1,
-                "created_at": f"{date_str}T08:30:00",
-                "updated_at": f"{date_str}T08:32:00",
-                "photos": [
-                    {
-                        "photo_id": day * 10 + 1,
-                        "image_url": f"https://picsum.photos/seed/photo{day}f/400/300",
-                        "analysis_status": "done",
-                    }
-                ],
-            }
-        ]
-    else:
-        diaries = []
-
-    return {"diaries": diaries}
-
-
 def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
-    """mock 다이어리 상세 응답 생성"""
-    mock_user_id = UUID("e435a643-a6c8-49ab-b14f-6dc4ae5af7be")
-
-    # diary_id에 따라 다른 mock 데이터 반환
+    """GET /diaries/{diary_id} test_mode용 mock 응답"""
     if diary_id == 12:
-        # 분석 완료된 다이어리
         return DiaryWithPhotos(
             id=12,
-            user_id=mock_user_id,
+            user_id=_MOCK_USER_ID,
             diary_date=date(2026, 1, 19),
             time_type="lunch",
             analysis_status="done",
@@ -555,31 +527,14 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
             note="칼국수 맛집 발견!",
             tags=["칼국수", "만두"],
             photo_count=3,
-            created_at=datetime(2026, 1, 19, 12, 40, 0),
-            updated_at=datetime(2026, 1, 19, 12, 45, 30),
-            photos=[
-                PhotoInDiary(
-                    photo_id=101,
-                    image_url="https://picsum.photos/seed/photo101/400/300",
-                    analysis_status="done",
-                ),
-                PhotoInDiary(
-                    photo_id=102,
-                    image_url="https://picsum.photos/seed/photo102/400/300",
-                    analysis_status="done",
-                ),
-                PhotoInDiary(
-                    photo_id=103,
-                    image_url="https://picsum.photos/seed/photo103/400/300",
-                    analysis_status="done",
-                ),
-            ],
+            created_at=datetime(2026, 1, 19, 12, 40),
+            updated_at=datetime(2026, 1, 19, 12, 45),
+            photos=_mock_photos(20260119, 3, 101),
         )
     if diary_id == 10:
-        # 분석 중인 다이어리
         return DiaryWithPhotos(
             id=10,
-            user_id=mock_user_id,
+            user_id=_MOCK_USER_ID,
             diary_date=date(2026, 1, 18),
             time_type="dinner",
             analysis_status="processing",
@@ -592,8 +547,8 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
             note=None,
             tags=[],
             photo_count=2,
-            created_at=datetime(2026, 1, 18, 19, 0, 0),
-            updated_at=datetime(2026, 1, 18, 19, 0, 0),
+            created_at=datetime(2026, 1, 18, 19, 0),
+            updated_at=datetime(2026, 1, 18, 19, 0),
             photos=[
                 PhotoInDiary(
                     photo_id=95,
@@ -607,10 +562,10 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
                 ),
             ],
         )
-    # 기본값 (분석 완료)
+    # 기본값
     return DiaryWithPhotos(
         id=diary_id,
-        user_id=mock_user_id,
+        user_id=_MOCK_USER_ID,
         diary_date=date(2026, 1, 20),
         time_type="breakfast",
         analysis_status="done",
@@ -623,13 +578,7 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
         note="모닝 커피",
         tags=["아메리카노"],
         photo_count=1,
-        created_at=datetime(2026, 1, 20, 8, 0, 0),
-        updated_at=datetime(2026, 1, 20, 8, 5, 0),
-        photos=[
-            PhotoInDiary(
-                photo_id=200,
-                image_url="https://picsum.photos/seed/photo200/400/300",
-                analysis_status="done",
-            )
-        ],
+        created_at=datetime(2026, 1, 20, 8, 0),
+        updated_at=datetime(2026, 1, 20, 8, 5),
+        photos=_mock_photos(20260120, 1, 200),
     )
