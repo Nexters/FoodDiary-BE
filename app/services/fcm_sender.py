@@ -88,6 +88,11 @@ def send_silent_push(token: str, data: object) -> bool:
     message = messaging.Message(
         data=fcm_data,
         token=token,
+        apns=messaging.APNSConfig(
+            payload=messaging.APNSPayload(
+                aps=messaging.Aps(content_available=True),
+            ),
+        ),
     )
 
     try:
