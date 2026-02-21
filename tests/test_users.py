@@ -33,7 +33,7 @@ class TestDeleteUserHappyPath:
         test_db_session: AsyncSession,
         cleanup_user_storage,
     ):
-        """회원 탈퇴 시 204 반환, DB 및 스토리지 데이터 전부 삭제됨"""
+        """회원 탈퇴 시 200 반환, DB 및 스토리지 데이터 전부 삭제됨"""
         # Given
         user = User(**create_test_user_data())
         test_db_session.add(user)
@@ -74,7 +74,8 @@ class TestDeleteUserHappyPath:
         )
 
         # Then
-        assert response.status_code == 204
+        assert response.status_code == 200
+        assert response.json() == {"message": "회원 탈퇴가 완료되었습니다."}
 
         user_result = await test_db_session.execute(
             select(User).where(User.id == user_id)
@@ -114,4 +115,5 @@ class TestDeleteUserHappyPath:
         )
 
         # Then
-        assert response.status_code == 204
+        assert response.status_code == 200
+        assert response.json() == {"message": "회원 탈퇴가 완료되었습니다."}
