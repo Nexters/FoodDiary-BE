@@ -23,6 +23,7 @@ from app.schemas.diary import (
     PhotoInDiary,
 )
 from app.services import diary_service, llm_service
+from app.services.diary_service import _build_tags
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -266,7 +267,7 @@ async def get_diary_blog_text(
         "road_address": diary.road_address,
         "category": diary.category,
         "note": diary.note,
-        "tags": diary.tags or [],
+        "tags": diary.tags,
         "diary_date": diary.diary_date.isoformat(),
         "time_type_ko": llm_service.TIME_TYPE_KO.get(diary.time_type, diary.time_type),
         "restaurant_url": diary.restaurant_url,
@@ -405,7 +406,7 @@ def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
         cover_photo_id=diary.cover_photo_id,
         cover_photo_url=cover_photo_url,
         note=diary.note,
-        tags=diary.tags or [],
+        tags=_build_tags(diary.analysis),
         photo_count=diary.photo_count,
         created_at=diary.created_at,
         updated_at=diary.updated_at,

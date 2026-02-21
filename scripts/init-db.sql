@@ -52,7 +52,6 @@ CREATE TABLE IF NOT EXISTS diaries (
     analysis_status VARCHAR(20) NOT NULL DEFAULT 'processing' CHECK (analysis_status IN ('processing', 'done', 'failed')),
     cover_photo_id INTEGER,
     note TEXT,
-    tags JSONB DEFAULT '[]'::jsonb,
     photo_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -80,11 +79,7 @@ COMMENT ON COLUMN diaries.road_address IS '도로명 주소 (예: 서울 중구 
 -- 다이어리 하나에 대한 AI 추론 결과 (유저 미확정 상태)
 CREATE TABLE IF NOT EXISTS diary_analysis (
     diary_id INTEGER PRIMARY KEY REFERENCES diaries(id) ON DELETE CASCADE,
-    restaurant_candidates JSONB DEFAULT '[]'::jsonb,
-    category_candidates JSONB DEFAULT '[]'::jsonb,
-    menu_candidates JSONB DEFAULT '[]'::jsonb,
-    keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
-    memo TEXT NOT NULL DEFAULT '',
+    result JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

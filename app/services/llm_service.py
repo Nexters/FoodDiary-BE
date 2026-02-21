@@ -29,27 +29,20 @@ TIME_TYPE_KO = {
 async def analyze_food_images(
     image_paths: list[str],
     restaurant_candidates: list[dict],
-) -> dict:
+) -> list[dict]:
     """
     같은 끼니의 음식 사진 여러 장을 한 번에 분석합니다.
 
     Args:
         image_paths: 분석할 이미지 파일 경로 목록
         restaurant_candidates: Kakao Map에서 조회한 주변 식당 후보 목록
-            [{"name": str, "address": str, ...}, ...]
+            [{"name": str, "url": str, "road_address": str, ...}, ...]
 
     Returns:
-        dict: 분석 결과 (food_category, restaurant_names, menus, keywords)
-            restaurant_names: 사진과 어울리는 순서로 정렬된 식당 이름 목록 (최대 5개)
+        list[dict]: 분석 결과 객체 배열 (최대 5개)
+            각 객체: {restaurant_name, restaurant_url, road_address, tags, category, memo}
+            restaurant_name, restaurant_url, road_address는 후보 그대로 사용
     """
-    default_result = {
-        "food_category": "기타",
-        "restaurant_names": [],
-        "menus": [],
-        "keywords": [],
-        "memo": "",
-    }
-
     try:
         # 이미지 로드 및 리사이즈
         image_parts = []
@@ -59,30 +52,55 @@ async def analyze_food_images(
             resized = _resize_image_bytes(raw)
             image_parts.append({"mime_type": "image/jpeg", "data": resized})
 
-        model = genai.GenerativeModel("gemini-3.0-flash")
-
-        # 식당 후보 리스트 구성
-        if restaurant_candidates:
-            restaurant_list = "\n".join(
-                f"- {r['name']} ({r.get('address', '')})" for r in restaurant_candidates
-            )
-            restaurant_section = (
-                f"주변 식당:\n{restaurant_list}\n"
-                "restaurant_names: 어울리는 순 최대 5개 (없으면 [])"
-            )
-        else:
-            restaurant_section = "restaurant_names: []"
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
         category_options = "한식/중식/일식/양식/분식/카페·디저트/패스트푸드/기타"
+        if restaurant_candidates:
+            restaurant_list = "\n".join(
+                f"- name:{r['name']}"
+                f" url:{r.get('url', '')}"
+                f" road_address:{r.get('road_address', '')}"
+                for r in restaurant_candidates
+            )
+            n = min(len(restaurant_candidates), 5)
+            restaurant_section = (
+                f"주변 식당 후보 {len(restaurant_candidates)}개"
+                " (name/url/road_address 값은 반드시 원본 그대로 사용):\n"
+                f"{restaurant_list}\n\n"
+                f"사진과 어울리는 순으로 정확히 {n}개를 배열로 반환."
+                " 각 후보마다 객체 1개씩."
+            )
+        else:
+            restaurant_section = (
+                "주변 식당 정보 없음."
+                " restaurant_name/restaurant_url/road_address는 null."
+                " 객체 1개만 반환."
+            )
+
         prompt = (
-            f"같은 끼니 사진 {len(image_parts)}장. JSON만 출력.\n"
-            f"카테고리: {category_options}\n"
+            f"같은 끼니 사진 {len(image_parts)}장 분석. JSON 배열만 출력.\n"
+            f"카테고리 옵션: {category_options}\n\n"
             f"{restaurant_section}\n\n"
-            "memo: 사진 속 음식·식당 AI 브리핑. 없는 내용 지어내지 말 것. 3~5줄 분량.\n"
-            "  도입 한 줄 (주요 특징 요약 톤)\n"
-            "  • 불릿 3~5개 (식당 정체성·대표메뉴·가성비·방문팁 중 해당하는 것만,"
-            " 각 한 문장)\n\n"
-            '{{"food_category":"","restaurant_names":[],"menus":[],"keywords":[],"memo":""}}'
+            "각 객체 필드:\n"
+            "  restaurant_name: 식당명 (후보에서 선택, 없으면 null)\n"
+            "  restaurant_url: 식당 URL (후보 원본 그대로, 없으면 null)\n"
+            "  road_address: 도로명 주소 (후보 원본 그대로, 없으면 null)\n"
+            "  tags: 메뉴명·키워드 통합 리스트 (사진에서 보이는 것만)\n"
+            "  category: 음식 카테고리\n"
+            "  memo: AI 브리핑 3~5줄"
+            " (도입 한 줄 + 불릿 3~5개, 없는 내용 지어내지 말 것)\n\n"
+            f"출력 예시 (후보 {min(len(restaurant_candidates), 5)}개 반환하는 경우):\n"
+            "["
+            + ",".join(
+                f'{{"restaurant_name":"{chr(65+i)}식당",'
+                f'"restaurant_url":"https://...",'
+                f'"road_address":"서울...",'
+                f'"tags":["메뉴{i+1}"],'
+                f'"category":"한식",'
+                f'"memo":"..."}}'
+                for i in range(min(len(restaurant_candidates), 5))
+            )
+            + "]"
         )
 
         response = model.generate_content([*image_parts, prompt])
@@ -90,24 +108,21 @@ async def analyze_food_images(
         response_text = _extract_json_text(response.text.strip())
         result = json.loads(response_text)
 
-        result.setdefault("food_category", "기타")
-        result.setdefault("restaurant_names", [])
-        result.setdefault("menus", [])
-        result.setdefault("keywords", [])
-        result.setdefault("memo", "")
+        if not isinstance(result, list):
+            result = []
 
-        logger.info(f"그룹 LLM 분석 완료: {len(image_paths)}장")
+        logger.info(f"그룹 LLM 분석 완료: {len(image_paths)}장, 후보 {len(result)}개")
         return result
 
     except json.JSONDecodeError as e:
         logger.error(f"그룹 LLM 응답 JSON 파싱 실패: {e}")
-        return default_result
+        raise
     except FileNotFoundError as e:
         logger.error(f"이미지 파일을 찾을 수 없음: {e}")
-        return default_result
+        raise
     except Exception as e:
         logger.error(f"그룹 LLM 분석 실패: {e}")
-        return default_result
+        raise
 
 
 async def generate_blog_text(diary_info: dict) -> str:
@@ -132,7 +147,7 @@ def _generate_blog_text_sync(diary_info: dict) -> str:
     다이어리 정보로 네이버 맛집 블로그 스타일 글을 동기 생성합니다.
     (Gemini SDK가 동기이므로 이 함수를 asyncio.to_thread로 호출)
     """
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash")
 
     restaurant_name = diary_info.get("restaurant_name") or "이름 없는 맛집"
     road_address = diary_info.get("road_address") or ""

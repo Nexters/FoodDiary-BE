@@ -22,7 +22,7 @@ class DiaryBase(BaseModel):
     road_address: str | None = Field(None, description="도로명 주소")
     category: str | None = Field(None, description="음식 카테고리")
     note: str | None = Field(None, description="메모")
-    tags: list[str] = Field(default=[], description="태그 리스트")
+    tags: list[str] = Field(default=[], description="태그 리스트 (keywords + menus)")
     photo_count: int = Field(
         default=0, description="포함된 사진 수 (최대 10개)", ge=0, le=10
     )
@@ -48,7 +48,6 @@ class DiaryUpdate(BaseModel):
     restaurant_name: str | None = None
     restaurant_url: str | None = None
     road_address: str | None = None
-    tags: list[str] | None = None
     note: str | None = None
     cover_photo_id: int | None = None
     photo_ids: list[int] | None = None
@@ -80,7 +79,6 @@ class DiaryConfirm(BaseModel):
     restaurant_url: str | None = Field(None, description="식당 URL (예: 카카오맵 링크)")
     road_address: str | None = Field(None, description="도로명 주소")
     note: str | None = Field(None, description="메모")
-    tags: list[str] | None = Field(None, description="태그 리스트")
 
 
 # ======================

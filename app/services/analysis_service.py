@@ -20,12 +20,7 @@ class AnalysisData:
     """분석 결과 데이터 (DB 저장 전)"""
 
     diary_id: int
-    food_category: str
-    restaurant_candidates: list
-    menu_candidates: list
-    keywords: list
-    raw_response: str
-    memo: str
+    result: list
 
 
 async def analyze_grouped_photo_data(
@@ -66,24 +61,14 @@ async def aggregate_photo_analysis_to_diary(
         data: 분석 결과
     """
     existing = await db.get(DiaryAnalysis, data.diary_id)
-    category_candidates = [data.food_category] if data.food_category else []
-    menu_candidates = [mc["name"] for mc in data.menu_candidates if mc.get("name")]
 
     if existing:
-        existing.restaurant_candidates = data.restaurant_candidates
-        existing.category_candidates = category_candidates
-        existing.menu_candidates = menu_candidates
-        existing.keywords = data.keywords
-        existing.memo = data.memo
+        existing.result = data.result
     else:
         db.add(
             DiaryAnalysis(
                 diary_id=data.diary_id,
-                restaurant_candidates=data.restaurant_candidates,
-                category_candidates=category_candidates,
-                menu_candidates=menu_candidates,
-                keywords=data.keywords,
-                memo=data.memo,
+                result=data.result,
             )
         )
 
@@ -110,8 +95,6 @@ async def _analyze_grouped_photo_data_internal(
             restaurant_candidates = [
                 {
                     "name": r["name"],
-                    "confidence": 0.8,
-                    "address": r["address"],
                     "url": (
                         f"https://place.map.kakao.com/{r['kakao_id']}"
                         if r.get("kakao_id")
@@ -124,22 +107,10 @@ async def _analyze_grouped_photo_data_internal(
         except Exception as e:
             logger.warning(f"GPS 파싱 또는 식당 검색 실패: {e}")
 
-    # 식당 후보 포함하여 LLM 1회 호출
-    llm_result = await analyze_food_images(image_paths, restaurant_candidates)
-
-    # Gemini가 선택한 순위대로 restaurant_candidates 재정렬 (최대 5개)
-    ranked_names: list[str] = llm_result.get("restaurant_names", [])
-    candidates_by_name = {r["name"]: r for r in restaurant_candidates}
-    ranked = [candidates_by_name[n] for n in ranked_names if n in candidates_by_name]
-    others = [r for r in restaurant_candidates if r["name"] not in set(ranked_names)]
-    restaurant_candidates = (ranked + others)[:5]
+    # LLM 1회 호출 → 객체 배열 직접 반환
+    result = await analyze_food_images(image_paths, restaurant_candidates)
 
     return AnalysisData(
         diary_id=diary_id,
-        food_category=llm_result.get("food_category", "기타"),
-        restaurant_candidates=restaurant_candidates,
-        menu_candidates=[{"name": m} for m in llm_result.get("menus", [])],
-        keywords=llm_result.get("keywords", []),
-        raw_response=str(llm_result),
-        memo=llm_result.get("memo", ""),
+        result=result,
     )
