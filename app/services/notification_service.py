@@ -37,7 +37,10 @@ async def send_silent_notification(
     if not device_token:
         return False
 
-    return send_silent_push(token=device_token, data=data)
+    result = send_silent_push(token=device_token, data=data)
+    if not result:
+        logger.warning("Silent push 전송 실패: device_id=%s", device_id)
+    return result
 
 
 async def send_push_notification(
@@ -63,15 +66,20 @@ async def send_push_notification(
     """
     device = await _find_active_device(db, device_id)
     if not device or not device.device_token:
+        logger.warning("활성 디바이스 없음: device_id=%s", device_id)
         return False
 
-    return send_notification(
+    result = send_notification(
         token=device.device_token, title=title, body=body, data=data
     )
+    if not result:
+        logger.warning("Push 알림 전송 실패: device_id=%s", device_id)
+    return result
 
 
 async def _get_device_token(db: AsyncSession, device_id: str) -> str | None:
     """device_id로 디바이스 토큰을 조회합니다 (is_active 무관)."""
+    logger.info("디바이스 토큰 조회 시도: device_id=%s", device_id)
     result = await db.execute(
         select(Device.device_token).where(
             Device.device_id == device_id,
