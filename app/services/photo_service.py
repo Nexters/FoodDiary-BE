@@ -249,6 +249,9 @@ async def _apply_top_restaurant(db: AsyncSession, diary_id: int) -> None:
     menu_names = [mc["name"] for mc in analysis.menu_candidates if mc.get("name")]
     diary.tags = list(dict.fromkeys(analysis.keywords + menu_names))
 
+    if analysis.memo:
+        diary.note = analysis.memo
+
     await db.commit()
 
 

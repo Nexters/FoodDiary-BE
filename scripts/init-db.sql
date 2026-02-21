@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS diary_analysis (
     category_candidates JSONB DEFAULT '[]'::jsonb,
     menu_candidates JSONB DEFAULT '[]'::jsonb,
     keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    memo TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

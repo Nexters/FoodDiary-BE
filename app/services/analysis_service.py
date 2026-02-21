@@ -25,6 +25,7 @@ class AnalysisData:
     menu_candidates: list
     keywords: list
     raw_response: str
+    memo: str
 
 
 async def analyze_grouped_photo_data(
@@ -73,6 +74,7 @@ async def aggregate_photo_analysis_to_diary(
         existing.category_candidates = category_candidates
         existing.menu_candidates = menu_candidates
         existing.keywords = data.keywords
+        existing.memo = data.memo
     else:
         db.add(
             DiaryAnalysis(
@@ -81,6 +83,7 @@ async def aggregate_photo_analysis_to_diary(
                 category_candidates=category_candidates,
                 menu_candidates=menu_candidates,
                 keywords=data.keywords,
+                memo=data.memo,
             )
         )
 
@@ -138,4 +141,5 @@ async def _analyze_grouped_photo_data_internal(
         menu_candidates=[{"name": m} for m in llm_result.get("menus", [])],
         keywords=llm_result.get("keywords", []),
         raw_response=str(llm_result),
+        memo=llm_result.get("memo", ""),
     )

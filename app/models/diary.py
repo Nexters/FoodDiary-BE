@@ -114,6 +114,7 @@ class DiaryAnalysis(Base):
     )
     menu_candidates: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     keywords: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    memo: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
         nullable=False, default=datetime.utcnow
     )

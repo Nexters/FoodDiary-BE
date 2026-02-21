@@ -47,6 +47,7 @@ async def analyze_food_images(
         "restaurant_names": [],
         "menus": [],
         "keywords": [],
+        "memo": "",
     }
 
     try:
@@ -66,30 +67,22 @@ async def analyze_food_images(
                 f"- {r['name']} ({r.get('address', '')})" for r in restaurant_candidates
             )
             restaurant_section = (
-                f"## 주변 식당 후보\n{restaurant_list}\n\n"
-                "restaurant_names: 위 후보 중 사진과 어울리는 순서로 최대 5개 선택 "
-                "(이름만, 없으면 빈 배열)"
+                f"주변 식당:\n{restaurant_list}\n"
+                "restaurant_names: 어울리는 순 최대 5개 (없으면 [])"
             )
         else:
             restaurant_section = "restaurant_names: []"
 
-        category_options = (
-            "한식 / 중식 / 일식 / 양식 / 분식 / 카페/디저트 / 패스트푸드 / 기타"
-        )
+        category_options = "한식/중식/일식/양식/분식/카페·디저트/패스트푸드/기타"
         prompt = (
-            f"아래 {len(image_parts)}장의 사진은 같은 끼니에서 촬영되었습니다.\n\n"
-            f"## 분석 항목\n"
-            f"food_category: {category_options} 중 하나\n"
-            f"menus: 사진에 보이는 메뉴 이름 목록\n"
-            f"keywords: 음식을 설명하는 키워드 목록 (예: 매운맛, 건강식)\n"
+            f"같은 끼니 사진 {len(image_parts)}장. JSON만 출력.\n"
+            f"카테고리: {category_options}\n"
             f"{restaurant_section}\n\n"
-            f"## 응답 형식 (JSON만 출력)\n"
-            "{{\n"
-            '    "food_category": "카테고리",\n'
-            '    "restaurant_names": ["1순위 식당명", "2순위 식당명"],\n'
-            '    "menus": ["메뉴1", "메뉴2"],\n'
-            '    "keywords": ["키워드1", "키워드2"]\n'
-            "}}"
+            "memo: 사진 속 음식·식당 AI 브리핑. 없는 내용 지어내지 말 것. 3~5줄 분량.\n"
+            "  도입 한 줄 (주요 특징 요약 톤)\n"
+            "  • 불릿 3~5개 (식당 정체성·대표메뉴·가성비·방문팁 중 해당하는 것만,"
+            " 각 한 문장)\n\n"
+            '{{"food_category":"","restaurant_names":[],"menus":[],"keywords":[],"memo":""}}'
         )
 
         response = model.generate_content([*image_parts, prompt])
@@ -101,6 +94,7 @@ async def analyze_food_images(
         result.setdefault("restaurant_names", [])
         result.setdefault("menus", [])
         result.setdefault("keywords", [])
+        result.setdefault("memo", "")
 
         logger.info(f"그룹 LLM 분석 완료: {len(image_paths)}장")
         return result
