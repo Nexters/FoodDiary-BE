@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.diary import AnalysisStatus, RestaurantCandidate, TimeType
+from app.schemas.diary import AnalysisStatus, TimeType
 
 # ======================
 # Base Models
@@ -108,5 +108,3 @@ class BatchUploadResponse(BaseModel):
         default=[],
         description="업로드된 사진 목록 (analysis_status: processing)",
     )
-
-

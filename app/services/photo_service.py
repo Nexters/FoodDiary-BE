@@ -8,6 +8,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
@@ -139,7 +140,9 @@ async def _run_analysis_pipeline(
             await aggregate_photo_analysis_to_diary(db, data)
             await _apply_top_restaurant(db, data.diary_id)
         except Exception as e:
-            logger.warning(f"DiaryAnalysis 집계 실패: diary_id={data.diary_id}, error={e}")
+            logger.warning(
+                f"DiaryAnalysis 집계 실패: diary_id={data.diary_id}, error={e}"
+            )
 
 
 # ========================================
@@ -221,7 +224,10 @@ async def _apply_top_restaurant(db: AsyncSession, diary_id: int) -> None:
         return
 
     analysis = await db.get(DiaryAnalysis, diary_id)
-    if analysis and analysis.restaurant_candidates:
+    if not analysis:
+        return
+
+    if analysis.restaurant_candidates:
         top = max(
             analysis.restaurant_candidates,
             key=lambda r: r.get("confidence", 0),
@@ -229,7 +235,21 @@ async def _apply_top_restaurant(db: AsyncSession, diary_id: int) -> None:
         diary.restaurant_name = top.get("name")
         diary.restaurant_url = top.get("url")
         diary.road_address = top.get("road_address")
-        await db.commit()
+
+    if analysis.category_candidates:
+        diary.category = analysis.category_candidates[0]
+
+    row = await db.execute(
+        select(Photo.id).where(Photo.diary_id == diary_id).order_by(Photo.id).limit(1)
+    )
+    first_photo_id = row.scalar_one_or_none()
+    if first_photo_id:
+        diary.cover_photo_id = first_photo_id
+
+    menu_names = [mc["name"] for mc in analysis.menu_candidates if mc.get("name")]
+    diary.tags = list(dict.fromkeys(analysis.keywords + menu_names))
+
+    await db.commit()
 
 
 async def _notify_failure(
@@ -271,10 +291,7 @@ async def _run_llm_analysis(
 ) -> list[AnalysisData]:
     """diary_id별 LLM 병렬 분석을 수행합니다."""
     logger.info(f"LLM 그룹 분석 시작: {len(diary_ids)}개 그룹")
-    group_tasks = [
-        analyze_grouped_photo_data(db, diary_id)
-        for diary_id in diary_ids
-    ]
+    group_tasks = [analyze_grouped_photo_data(db, diary_id) for diary_id in diary_ids]
     raw_results = await asyncio.gather(*group_tasks, return_exceptions=True)
 
     analysis_results = [r for r in raw_results if isinstance(r, AnalysisData)]
