@@ -1,12 +1,14 @@
 """LLM 서비스 - Gemini API를 사용한 음식 이미지 분석 및 블로그 글 생성."""
 
 import asyncio
+import io
 import json
 import logging
 import re
 
 import aiofiles
 import google.generativeai as genai
+from PIL import Image
 
 from app.core.config import settings
 
@@ -24,88 +26,111 @@ TIME_TYPE_KO = {
 }
 
 
-async def analyze_food_image(image_path: str) -> dict:
+async def analyze_food_images(
+    image_paths: list[str],
+    restaurant_candidates: list[dict],
+) -> dict:
     """
-    음식 이미지를 분석하여 음식 정보를 추출합니다.
+    같은 끼니의 음식 사진 여러 장을 한 번에 분석합니다.
 
     Args:
-        image_path: 분석할 이미지 파일 경로
+        image_paths: 분석할 이미지 파일 경로 목록
+        restaurant_candidates: Kakao Map에서 조회한 주변 식당 후보 목록
+            [{"name": str, "address": str, ...}, ...]
 
     Returns:
-        dict: 분석 결과 (food_category, menus, keywords)
+        dict: 분석 결과 (food_category, restaurant_names, menus, keywords)
+            restaurant_names: 사진과 어울리는 순서로 정렬된 식당 이름 목록 (최대 5개)
     """
     default_result = {
         "food_category": "기타",
+        "restaurant_names": [],
         "menus": [],
         "keywords": [],
     }
 
     try:
-        # 이미지 파일 로드
-        async with aiofiles.open(image_path, "rb") as f:
-            image_data = await f.read()
+        # 이미지 로드 및 리사이즈
+        image_parts = []
+        for path in image_paths:
+            async with aiofiles.open(path, "rb") as f:
+                raw = await f.read()
+            resized = _resize_image_bytes(raw)
+            image_parts.append({"mime_type": "image/jpeg", "data": resized})
 
-        # Gemini 모델 설정 (gemini-2.0-flash 사용)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-3.0-flash")
 
-        # 프롬프트 작성
-        prompt = """이 음식 사진을 분석해서 다음 정보를 JSON 형식으로 추출해주세요:
+        # 식당 후보 리스트 구성
+        if restaurant_candidates:
+            restaurant_list = "\n".join(
+                f"- {r['name']} ({r.get('address', '')})" for r in restaurant_candidates
+            )
+            restaurant_section = (
+                f"## 주변 식당 후보\n{restaurant_list}\n\n"
+                "restaurant_names: 위 후보 중 사진과 어울리는 순서로 최대 5개 선택 "
+                "(이름만, 없으면 빈 배열)"
+            )
+        else:
+            restaurant_section = "restaurant_names: []"
 
-1. food_category: 음식 카테고리
-   (한식, 중식, 일식, 양식, 분식, 카페/디저트, 패스트푸드, 기타 중 하나)
-2. menus: 사진에 보이는 메뉴 이름들 (리스트)
-3. keywords: 이 음식을 설명하는 키워드들 (예: 매운맛, 건강식, 고단백 등) (리스트)
-
-반드시 아래 JSON 형식으로만 응답해주세요:
-{
-    "food_category": "카테고리",
-    "menus": ["메뉴1", "메뉴2"],
-    "keywords": ["키워드1", "키워드2"]
-}"""
-
-        # API 호출
-        response = model.generate_content(
-            [
-                {"mime_type": "image/jpeg", "data": image_data},
-                prompt,
-            ]
+        category_options = (
+            "한식 / 중식 / 일식 / 양식 / 분식 / 카페/디저트 / 패스트푸드 / 기타"
+        )
+        prompt = (
+            f"아래 {len(image_parts)}장의 사진은 같은 끼니에서 촬영되었습니다.\n\n"
+            f"## 분석 항목\n"
+            f"food_category: {category_options} 중 하나\n"
+            f"menus: 사진에 보이는 메뉴 이름 목록\n"
+            f"keywords: 음식을 설명하는 키워드 목록 (예: 매운맛, 건강식)\n"
+            f"{restaurant_section}\n\n"
+            f"## 응답 형식 (JSON만 출력)\n"
+            "{{\n"
+            '    "food_category": "카테고리",\n'
+            '    "restaurant_names": ["1순위 식당명", "2순위 식당명"],\n'
+            '    "menus": ["메뉴1", "메뉴2"],\n'
+            '    "keywords": ["키워드1", "키워드2"]\n'
+            "}}"
         )
 
-        # 응답 파싱
-        response_text = response.text.strip()
+        response = model.generate_content([*image_parts, prompt])
 
-        # JSON 블록 추출 (```json ... ``` 형식 처리)
-        if "```json" in response_text:
-            start = response_text.find("```json") + 7
-            end = response_text.find("```", start)
-            response_text = response_text[start:end].strip()
-        elif "```" in response_text:
-            start = response_text.find("```") + 3
-            end = response_text.find("```", start)
-            response_text = response_text[start:end].strip()
-
+        response_text = _extract_json_text(response.text.strip())
         result = json.loads(response_text)
 
-        # 필수 필드 검증
-        if "food_category" not in result:
-            result["food_category"] = "기타"
-        if "menus" not in result:
-            result["menus"] = []
-        if "keywords" not in result:
-            result["keywords"] = []
+        result.setdefault("food_category", "기타")
+        result.setdefault("restaurant_names", [])
+        result.setdefault("menus", [])
+        result.setdefault("keywords", [])
 
-        logger.info(f"LLM 분석 완료: {image_path}")
+        logger.info(f"그룹 LLM 분석 완료: {len(image_paths)}장")
         return result
 
     except json.JSONDecodeError as e:
-        logger.error(f"LLM 응답 JSON 파싱 실패: {e}")
+        logger.error(f"그룹 LLM 응답 JSON 파싱 실패: {e}")
         return default_result
-    except FileNotFoundError:
-        logger.error(f"이미지 파일을 찾을 수 없음: {image_path}")
+    except FileNotFoundError as e:
+        logger.error(f"이미지 파일을 찾을 수 없음: {e}")
         return default_result
     except Exception as e:
-        logger.error(f"LLM 분석 실패: {e}")
+        logger.error(f"그룹 LLM 분석 실패: {e}")
         return default_result
+
+
+async def generate_blog_text(diary_info: dict) -> str:
+    """
+    다이어리 정보로 네이버 맛집 블로그 스타일 글을 생성합니다.
+
+    Args:
+        diary_info: 다이어리 정보 딕셔너리
+            (식당명, 주소, 카테고리, 메모, 태그, 날짜, 끼니, URL 등)
+
+    Returns:
+        str: 생성된 블로그 본문 텍스트
+
+    Raises:
+        Exception: Gemini API 호출 실패 시
+    """
+    return await asyncio.to_thread(_generate_blog_text_sync, diary_info)
 
 
 def _generate_blog_text_sync(diary_info: dict) -> str:
@@ -186,18 +211,26 @@ def _normalize_blog_text_for_paste(text: str) -> str:
     return text.strip()
 
 
-async def generate_blog_text(diary_info: dict) -> str:
-    """
-    다이어리 정보로 네이버 맛집 블로그 스타일 글을 생성합니다.
+def _extract_json_text(response_text: str) -> str:
+    """Gemini 응답에서 JSON 텍스트만 추출합니다."""
+    if "```json" in response_text:
+        start = response_text.find("```json") + 7
+        end = response_text.find("```", start)
+        return response_text[start:end].strip()
+    if "```" in response_text:
+        start = response_text.find("```") + 3
+        end = response_text.find("```", start)
+        return response_text[start:end].strip()
+    return response_text
 
-    Args:
-        diary_info: 다이어리 정보 딕셔너리
-            (식당명, 주소, 카테고리, 메모, 태그, 날짜, 끼니, URL 등)
 
-    Returns:
-        str: 생성된 블로그 본문 텍스트
-
-    Raises:
-        Exception: Gemini API 호출 실패 시
-    """
-    return await asyncio.to_thread(_generate_blog_text_sync, diary_info)
+def _resize_image_bytes(data: bytes, max_size: int = 1024) -> bytes:
+    """장축을 max_size px로 리사이즈하여 JPEG bytes 반환 (원본 비율 유지)."""
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_size:
+        ratio = max_size / max(w, h)
+        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
