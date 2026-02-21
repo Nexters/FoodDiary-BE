@@ -18,12 +18,10 @@ from app.schemas.health import HealthResponse
 from app.schemas.photo import (
     BatchUploadResponse,
     MenuCandidate,
-    PhotoAnalysisResultResponse,
     PhotoBase,
     PhotoCreate,
     PhotoResponse,
     PhotoUploadResult,
-    PhotoWithAnalysis,
 )
 
 __all__ = [
@@ -43,13 +41,11 @@ __all__ = [
     "LoginResponse",
     "MenuCandidate",
     "OAuthProvider",
-    "PhotoAnalysisResultResponse",
     "PhotoBase",
     "PhotoCreate",
     "PhotoInDiary",
     "PhotoResponse",
     "PhotoUploadResult",
-    "PhotoWithAnalysis",
     "RestaurantCandidate",
     "TimeType",
 ]

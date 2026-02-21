@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS diary_analysis (
     restaurant_candidates JSONB DEFAULT '[]'::jsonb,
     category_candidates JSONB DEFAULT '[]'::jsonb,
     menu_candidates JSONB DEFAULT '[]'::jsonb,
+    keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -105,28 +106,6 @@ CREATE INDEX IF NOT EXISTS idx_photos_diary_id
     ON photos(diary_id);
 CREATE INDEX IF NOT EXISTS idx_photos_taken_at 
     ON photos(taken_at DESC);
-
--- ======================
--- PhotoAnalysisResult 테이블
--- ======================
--- 사진 하나에 대한 AI 추론 결과 (유저 미확정 상태)
-CREATE TABLE IF NOT EXISTS photo_analysis_results (
-    id SERIAL PRIMARY KEY,
-    photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
-    food_category VARCHAR(100),
-    restaurant_name_candidates JSONB DEFAULT '[]'::jsonb,
-    menu_candidates JSONB DEFAULT '[]'::jsonb,
-    keywords JSONB DEFAULT '[]'::jsonb,
-    raw_response TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT unique_photo_analysis UNIQUE (photo_id)
-);
-
--- PhotoAnalysisResult 테이블 인덱스
-CREATE INDEX IF NOT EXISTS idx_photo_analysis_photo_id 
-    ON photo_analysis_results(photo_id);
 
 -- ======================
 -- Devices 테이블
@@ -189,11 +168,6 @@ CREATE TRIGGER update_photos_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_photo_analysis_results_updated_at
-    BEFORE UPDATE ON photo_analysis_results
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
 CREATE TRIGGER update_devices_updated_at
     BEFORE UPDATE ON devices
     FOR EACH ROW
@@ -211,7 +185,6 @@ BEGIN
     RAISE NOTICE '  - diaries';
     RAISE NOTICE '  - diary_analysis';
     RAISE NOTICE '  - photos';
-    RAISE NOTICE '  - photo_analysis_results';
     RAISE NOTICE '  - devices';
     RAISE NOTICE '==============================================';
 END $$;
