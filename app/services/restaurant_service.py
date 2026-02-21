@@ -77,12 +77,12 @@ async def _search_by_diary(
 
     restaurants = [
         RestaurantItem(
-            name=c["name"],
+            name=c["restaurant_name"],
             road_address=c.get("road_address", ""),
-            url=c.get("url", ""),
+            url=c.get("restaurant_url", ""),
         )
-        for c in analysis.restaurant_candidates
-        if c.get("name") and c.get("road_address") and c.get("url")
+        for c in (analysis.result or [])
+        if c.get("restaurant_name") and c.get("road_address") and c.get("restaurant_url")
     ]
 
     return RestaurantSearchResponse(

@@ -29,7 +29,6 @@ def create_diary_data(
         "analysis_status": analysis_status,
         "cover_photo_id": None,
         "note": note,
-        "tags": [],
         "photo_count": photo_count,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -56,28 +55,32 @@ def create_photo_data(
 
 def create_diary_analysis_data(
     diary_id: int,
-    restaurant_candidates: list | None = None,
-    category_candidates: list | None = None,
-    menu_candidates: list | None = None,
+    result: list | None = None,
 ) -> dict:
     """테스트용 다이어리 분석 데이터 생성"""
-    if restaurant_candidates is None:
-        restaurant_candidates = [
-            {"name": "맛집", "confidence": 0.9, "address": "서울시 강남구"},
-            {"name": "식당", "confidence": 0.7, "address": "서울시 서초구"},
+    if result is None:
+        result = [
+            {
+                "restaurant_name": "맛집",
+                "restaurant_url": None,
+                "road_address": "서울시 강남구",
+                "tags": ["김치찌개", "된장찌개"],
+                "category": "한식",
+                "memo": "",
+            },
+            {
+                "restaurant_name": "식당",
+                "restaurant_url": None,
+                "road_address": "서울시 서초구",
+                "tags": ["파스타", "스테이크"],
+                "category": "일식",
+                "memo": "",
+            },
         ]
-    if category_candidates is None:
-        # category_candidates는 문자열 리스트여야 함
-        category_candidates = ["한식", "일식"]
-    if menu_candidates is None:
-        # menu_candidates는 문자열 리스트여야 함
-        menu_candidates = ["김치찌개", "된장찌개"]
 
     return {
         "diary_id": diary_id,
-        "restaurant_candidates": restaurant_candidates,
-        "category_candidates": category_candidates,
-        "menu_candidates": menu_candidates,
+        "result": result,
         # DiaryAnalysis 모델은 datetime.utcnow를 사용하므로 timezone-naive로 생성
         "created_at": datetime.utcnow(),
     }

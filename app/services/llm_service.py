@@ -40,8 +40,8 @@ async def analyze_food_images(
 
     Returns:
         list[dict]: 분석 결과 객체 배열 (최대 5개)
-            각 객체: {restaurant_name, restaurant_url, road_address, tags, category, memo}
-            restaurant_name, restaurant_url, road_address는 후보 그대로 사용
+            각 객체: {restaurant_name, restaurant_url, road_address,
+                tags, category, memo} — restaurant 필드는 후보 원본 그대로 사용
     """
     try:
         # 이미지 로드 및 리사이즈
