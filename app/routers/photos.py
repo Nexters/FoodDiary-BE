@@ -128,9 +128,10 @@ async def batch_upload_photos_endpoint(
             detail="모든 파일 처리에 실패했습니다.",
         )
 
+    diary_ids = list(dict.fromkeys(r.diary_id for r in sync_results))
     background_tasks.add_task(
         analyze_and_notify,
-        sync_results=sync_results,
+        diary_ids=diary_ids,
         device_id=device_id,
         target_date=target_date,
     )
