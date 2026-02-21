@@ -83,27 +83,34 @@ def send_silent_push(token: str, data: object) -> bool:
         return False
 
     fcm_data = _serialize_data(data)
+    logger.info("FCM Silent Push 전송 시도: data=%s, token=%s...", fcm_data, token[:20])
 
     message = messaging.Message(
         data=fcm_data,
         token=token,
+        apns=messaging.APNSConfig(
+            headers={"apns-priority": "5"},
+            payload=messaging.APNSPayload(
+                aps=messaging.Aps(content_available=True),
+            ),
+        ),
     )
 
     try:
-        messaging.send(message)
-        logger.info("FCM Silent Push 전송 성공")
+        message_id = messaging.send(message)
+        logger.info("FCM Silent Push 전송 성공: message_id=%s", message_id)
         return True
     except messaging.UnregisteredError:
-        logger.warning("만료된 FCM 토큰: token=%s", token[:20])
+        logger.warning("만료된 FCM 토큰: token=%s...", token[:20])
         return False
     except messaging.SenderIdMismatchError:
-        logger.warning("Sender ID 불일치: token=%s", token[:20])
+        logger.warning("Sender ID 불일치: token=%s...", token[:20])
         return False
     except ValueError as e:
         logger.error("잘못된 FCM 인자: error=%s", e)
         return False
     except Exception:
-        logger.exception("FCM Silent Push 전송 실패")
+        logger.exception("FCM Silent Push 전송 실패: token=%s...", token[:20])
         return False
 
 

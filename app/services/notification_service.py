@@ -29,17 +29,21 @@ async def send_silent_notification(
     Returns:
         전송 성공 여부
     """
+    logger.info("send_silent_notification 호출: device_id=%s, data=%s", device_id, data)
     if not device_id:
         logger.warning("device_id가 없어 silent push 전송 생략")
         return False
 
     device_token = await _get_device_token(db, device_id)
     if not device_token:
+        logger.warning("device_token 없음으로 전송 중단: device_id=%s", device_id)
         return False
 
     result = send_silent_push(token=device_token, data=data)
     if not result:
         logger.warning("Silent push 전송 실패: device_id=%s", device_id)
+    else:
+        logger.info("Silent push 전송 완료: device_id=%s", device_id)
     return result
 
 
