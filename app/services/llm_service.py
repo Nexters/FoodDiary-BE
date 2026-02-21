@@ -54,18 +54,18 @@ async def analyze_food_images(
 
         model = genai.GenerativeModel("gemini-2.5-flash")
 
-        category_options = "한식/중식/일식/양식/분식/카페·디저트/패스트푸드/기타"
         if restaurant_candidates:
             restaurant_list = "\n".join(
                 f"- name:{r['name']}"
                 f" url:{r.get('url', '')}"
                 f" road_address:{r.get('road_address', '')}"
+                f" category:{r.get('category', '')}"
                 for r in restaurant_candidates
             )
             n = min(len(restaurant_candidates), 5)
             restaurant_section = (
                 f"주변 식당 후보 {len(restaurant_candidates)}개"
-                " (name/url/road_address 값은 반드시 원본 그대로 사용):\n"
+                " (name/url/road_address/category 값은 반드시 원본 그대로 사용):\n"
                 f"{restaurant_list}\n\n"
                 f"사진과 어울리는 순으로 정확히 {n}개를 배열로 반환."
                 " 각 후보마다 객체 1개씩."
@@ -73,20 +73,19 @@ async def analyze_food_images(
         else:
             restaurant_section = (
                 "주변 식당 정보 없음."
-                " restaurant_name/restaurant_url/road_address는 null."
+                " restaurant_name/restaurant_url/road_address/category는 null."
                 " 객체 1개만 반환."
             )
 
         prompt = (
             f"같은 끼니 사진 {len(image_parts)}장 분석. JSON 배열만 출력.\n"
-            f"카테고리 옵션: {category_options}\n\n"
             f"{restaurant_section}\n\n"
             "각 객체 필드:\n"
             "  restaurant_name: 식당명 (후보에서 선택, 없으면 null)\n"
             "  restaurant_url: 식당 URL (후보 원본 그대로, 없으면 null)\n"
             "  road_address: 도로명 주소 (후보 원본 그대로, 없으면 null)\n"
             "  tags: 메뉴명·키워드 통합 리스트 (사진에서 보이는 것만)\n"
-            "  category: 음식 카테고리\n"
+            "  category: 후보 식당의 category 값 원본 그대로 (후보 없으면 null)\n"
             "  memo: AI 브리핑 3~5줄"
             " (도입 한 줄 + 불릿 3~5개, 없는 내용 지어내지 말 것)\n\n"
             f"출력 예시 (후보 {min(len(restaurant_candidates), 5)}개 반환하는 경우):\n"
@@ -96,7 +95,7 @@ async def analyze_food_images(
                 f'"restaurant_url":"https://...",'
                 f'"road_address":"서울...",'
                 f'"tags":["메뉴{i+1}"],'
-                f'"category":"한식",'
+                f'"category":"카페",'
                 f'"memo":"..."}}'
                 for i in range(min(len(restaurant_candidates), 5))
             )

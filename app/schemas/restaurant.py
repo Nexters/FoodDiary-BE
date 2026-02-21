@@ -7,6 +7,7 @@ class RestaurantItem(BaseModel):
     name: str = Field(..., description="음식점 이름")
     road_address: str = Field(..., description="도로명 주소")
     url: str = Field(..., description="음식점 링크")
+    category: str = Field(default="", description="음식점 카테고리")
 
 
 class RestaurantSearchResponse(BaseModel):

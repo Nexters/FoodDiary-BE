@@ -101,6 +101,7 @@ async def _analyze_grouped_photo_data_internal(
                         else None
                     ),
                     "road_address": r.get("road_address", ""),
+                    "category": r.get("category", "").split(" > ")[-1],
                 }
                 for r in nearby
             ]

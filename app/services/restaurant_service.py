@@ -43,6 +43,7 @@ async def _search_by_keyword(
             name=r["name"],
             road_address=r["road_address"],
             url=r["url"],
+            category=r.get("category", ""),
         )
         for r in result["restaurants"]
         if r["name"] and r["road_address"] and r["url"]
