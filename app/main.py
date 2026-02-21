@@ -2,12 +2,6 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    force=True,
-)
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
@@ -23,6 +17,12 @@ from app.routers import (
     users_router,
 )
 from app.services.fcm_sender import initialize_firebase
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,
+)
 
 
 @asynccontextmanager
