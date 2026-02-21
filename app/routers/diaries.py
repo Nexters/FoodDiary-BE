@@ -1,5 +1,6 @@
 """Diary 라우터"""
 
+import logging
 from datetime import date, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
@@ -16,12 +17,14 @@ from app.schemas.diary import (
     DatePhotosEntry,
     DiariesByDateResponse,
     DiaryAnalysisResponse,
+    DiaryBlogTextResponse,
     DiaryUpdate,
     DiaryWithPhotos,
     PhotoInDiary,
 )
-from app.services import diary_service
+from app.services import diary_service, llm_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
 
@@ -235,6 +238,50 @@ async def get_diary_suggestions(
             detail="Analysis not found or diary doesn't exist.",
         )
     return analysis
+
+
+@router.get("/{diary_id}/blog-text", response_model=DiaryBlogTextResponse)
+async def get_diary_blog_text(
+    diary_id: int,
+    db: AsyncSession = Depends(get_session),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    다이어리 정보로 블로그 공유용 텍스트 생성
+
+    "블로그에 공유할 텍스트 복사" 버튼 시 호출.
+    식당/메뉴/메모를 바탕으로 네이버 맛집 블로그 스타일 본문을 생성합니다.
+    """
+    diary = await diary_service.get_diary_by_id(
+        db=db, user_id=user_id, diary_id=diary_id
+    )
+    if diary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found or you don't have access.",
+        )
+
+    diary_info = {
+        "restaurant_name": diary.restaurant_name,
+        "road_address": diary.road_address,
+        "category": diary.category,
+        "note": diary.note,
+        "tags": diary.tags or [],
+        "diary_date": diary.diary_date.isoformat(),
+        "time_type_ko": llm_service.TIME_TYPE_KO.get(diary.time_type, diary.time_type),
+        "restaurant_url": diary.restaurant_url,
+    }
+
+    try:
+        blog_text = await llm_service.generate_blog_text(diary_info)
+    except Exception as e:
+        logger.exception("블로그 텍스트 생성 실패: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Blog text generation failed. Please try again later.",
+        ) from e
+
+    return DiaryBlogTextResponse(blog_text=blog_text)
 
 
 @router.patch("/{diary_id}", response_model=DiaryWithPhotos)

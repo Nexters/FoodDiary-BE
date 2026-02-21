@@ -192,6 +192,17 @@ class RestaurantCandidate(BaseModel):
     zone_no: str | None = Field(None, description="우편번호")
 
 
+class DiaryBlogTextResponse(BaseModel):
+    """
+    다이어리 기반 블로그 글 생성 응답
+
+    GET /diaries/{diary_id}/blog-text
+    "블로그에 공유할 텍스트 복사" 버튼 시 사용
+    """
+
+    blog_text: str = Field(..., description="생성된 블로그 포스팅 본문 텍스트")
+
+
 class DiaryAnalysisResponse(BaseModel):
     """
     다이어리 분석 후보 응답
