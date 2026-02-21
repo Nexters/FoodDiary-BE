@@ -370,7 +370,6 @@ class TestGetDiarySuggestions:
         assert "menu_candidates" in data
         assert len(data["restaurant_candidates"]) == 2
         assert data["restaurant_candidates"][0]["name"] == "맛집"
-        assert data["restaurant_candidates"][0]["confidence"] == 0.9
         assert len(data["category_candidates"]) == 2
         assert "한식" in data["category_candidates"]
         assert len(data["menu_candidates"]) == 2

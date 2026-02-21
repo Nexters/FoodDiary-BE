@@ -52,22 +52,24 @@ class TestRestaurantServiceWithDB:
         # Given: DiaryAnalysis 생성
         analysis = DiaryAnalysis(
             diary_id=diary.id,
-            restaurant_candidates=[
+            result=[
                 {
-                    "name": "명동교자",
+                    "restaurant_name": "명동교자",
+                    "restaurant_url": "https://place.map.kakao.com/7942972",
                     "road_address": "서울 중구 명동10길 29",
-                    "url": "https://place.map.kakao.com/7942972",
-                    "confidence": 0.9,
+                    "tags": ["칼국수"],
+                    "category": "한식",
+                    "memo": "",
                 },
                 {
-                    "name": "을지면옥",
+                    "restaurant_name": "을지면옥",
+                    "restaurant_url": "https://place.map.kakao.com/8001234",
                     "road_address": "서울 중구 을지로35길 10",
-                    "url": "https://place.map.kakao.com/8001234",
-                    "confidence": 0.7,
+                    "tags": [],
+                    "category": "한식",
+                    "memo": "",
                 },
             ],
-            category_candidates=["한식"],
-            menu_candidates=["칼국수"],
         )
         test_db_session.add(analysis)
         await test_db_session.commit()
@@ -153,15 +155,16 @@ class TestRestaurantServiceWithDB:
         # Given: DiaryAnalysis
         analysis = DiaryAnalysis(
             diary_id=diary.id,
-            restaurant_candidates=[
+            result=[
                 {
-                    "name": "명동교자",
+                    "restaurant_name": "명동교자",
+                    "restaurant_url": "https://place.map.kakao.com/7942972",
                     "road_address": "서울 중구 명동10길 29",
-                    "url": "https://place.map.kakao.com/7942972",
+                    "tags": [],
+                    "category": "한식",
+                    "memo": "",
                 },
             ],
-            category_candidates=[],
-            menu_candidates=[],
         )
         test_db_session.add(analysis)
         await test_db_session.commit()
@@ -229,20 +232,24 @@ class TestRestaurantServiceWithDB:
         # Given: 일부 후보에 url 누락
         analysis = DiaryAnalysis(
             diary_id=diary.id,
-            restaurant_candidates=[
+            result=[
                 {
-                    "name": "명동교자",
+                    "restaurant_name": "명동교자",
+                    "restaurant_url": "https://place.map.kakao.com/7942972",
                     "road_address": "서울 중구 명동10길 29",
-                    "url": "https://place.map.kakao.com/7942972",
+                    "tags": [],
+                    "category": "한식",
+                    "memo": "",
                 },
                 {
-                    "name": "불완전한 식당",
+                    "restaurant_name": "불완전한 식당",
+                    "restaurant_url": "",
                     "road_address": "",
-                    "url": "",
+                    "tags": [],
+                    "category": "",
+                    "memo": "",
                 },
             ],
-            category_candidates=[],
-            menu_candidates=[],
         )
         test_db_session.add(analysis)
         await test_db_session.commit()
@@ -350,15 +357,16 @@ class TestKakaoKeywordSearch:
 
         analysis = DiaryAnalysis(
             diary_id=diary.id,
-            restaurant_candidates=[
+            result=[
                 {
-                    "name": "DB에만_있는_식당",
+                    "restaurant_name": "DB에만_있는_식당",
+                    "restaurant_url": "https://place.map.kakao.com/0000",
                     "road_address": "서울시 어딘가",
-                    "url": "https://place.map.kakao.com/0000",
+                    "tags": [],
+                    "category": "한식",
+                    "memo": "",
                 },
             ],
-            category_candidates=[],
-            menu_candidates=[],
         )
         test_db_session.add(analysis)
         await test_db_session.commit()

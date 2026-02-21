@@ -8,6 +8,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
@@ -15,8 +16,7 @@ from app.models import Diary, Photo
 from app.services.analysis_service import (
     AnalysisData,
     aggregate_photo_analysis_to_diary,
-    analyze_photo_data,
-    save_photo_analysis,
+    analyze_grouped_photo_data,
 )
 from app.services.diary_service import get_or_create_diary
 from app.services.notification_service import send_silent_notification
@@ -35,7 +35,6 @@ class PhotoSyncResult:
     diary_id: int
     time_type: str
     image_url: str
-    taken_location: str | None
 
 
 # ========================================
@@ -86,7 +85,7 @@ async def batch_upload_photos_sync(
 
 
 async def analyze_and_notify(
-    sync_results: list[PhotoSyncResult],
+    diary_ids: list[int],
     device_id: str,
     target_date: date,
     test_mode: bool = False,
@@ -94,17 +93,21 @@ async def analyze_and_notify(
     """
     BackgroundTask에서 호출되는 비동기 분석 단계.
 
-    동기 단계에서 생성된 Photo/Diary 정보를 받아
+    동기 단계에서 생성된 diary_id 목록을 받아
     LLM 분석 + DiaryAnalysis 집계 + FCM 전송 수행.
     완료 후 Diary.analysis_status를 "done" 또는 "failed"로 업데이트.
     """
-    if not sync_results:
+    if not diary_ids:
         return
 
     async with AsyncSessionLocal() as db:
         try:
-            await _run_analysis_pipeline(db, sync_results, test_mode=test_mode)
-            await _mark_diaries_done(db, sync_results)
+            failed_ids = await _run_analysis_pipeline(
+                db, diary_ids, test_mode=test_mode
+            )
+            succeeded_ids = [d for d in diary_ids if d not in set(failed_ids)]
+            if succeeded_ids:
+                await _mark_diaries_done(db, succeeded_ids)
 
             await send_silent_notification(
                 db=db,
@@ -116,7 +119,7 @@ async def analyze_and_notify(
             )
         except Exception as e:
             logger.exception(f"백그라운드 분석 실패: {e}")
-            await _mark_diaries_failed(db, sync_results)
+            await _mark_diaries_failed(db, diary_ids)
             await _notify_failure(db, target_date, device_id)
 
 
@@ -127,41 +130,33 @@ async def analyze_and_notify(
 
 async def _run_analysis_pipeline(
     db: AsyncSession,
-    sync_results: list[PhotoSyncResult],
+    diary_ids: list[int],
     test_mode: bool = False,
-) -> None:
-    """LLM 병렬 분석 (또는 mock) + 결과 저장 + DiaryAnalysis 집계 수행"""
+) -> list[int]:
+    """LLM 그룹 병렬 분석 (또는 mock) + DiaryAnalysis 집계 수행.
+
+    실패한 diary_ids를 반환합니다.
+    """
     if test_mode:
-        logger.info(f"Mock 분석 데이터 생성: {len(sync_results)}개 사진")
-        analysis_results: list[AnalysisData | None | BaseException] = [
-            _create_mock_analysis_data(r.photo_id) for r in sync_results
-        ]
-        logger.info("Mock 분석 데이터 생성 완료")
+        analysis_results = _create_mock_analysis_results(diary_ids)
+        failed_ids: list[int] = []
     else:
-        logger.info(f"LLM 분석 시작: {len(sync_results)}개 사진")
-        analysis_results = await asyncio.gather(
-            *[
-                analyze_photo_data(r.image_url, r.photo_id, r.taken_location)
-                for r in sync_results
-            ],
-            return_exceptions=True,
-        )
-        logger.info("LLM 분석 완료")
+        analysis_results, failed_ids = await _run_llm_analysis(db, diary_ids)
 
-    for result in analysis_results:
-        if isinstance(result, AnalysisData):
-            try:
-                await save_photo_analysis(db, result)
-            except Exception as e:
-                logger.warning(f"분석 결과 저장 실패: photo_id={result.photo_id}, {e}")
-
-    diary_ids = {r.diary_id for r in sync_results}
-    for diary_id in diary_ids:
+    for data in analysis_results:
         try:
-            await aggregate_photo_analysis_to_diary(db, diary_id)
-            await _apply_top_restaurant(db, diary_id)
+            await aggregate_photo_analysis_to_diary(db, data)
+            await _apply_top_restaurant(db, data.diary_id)
         except Exception as e:
-            logger.warning(f"DiaryAnalysis 집계 실패: diary_id={diary_id}, error={e}")
+            logger.warning(
+                f"DiaryAnalysis 집계 실패: diary_id={data.diary_id}, error={e}"
+            )
+            failed_ids.append(data.diary_id)
+
+    if failed_ids:
+        await _mark_diaries_failed(db, failed_ids)
+
+    return failed_ids
 
 
 # ========================================
@@ -204,16 +199,14 @@ async def _process_single_photo(
         diary_id=diary.id,
         time_type=time_type,
         image_url=image_url,
-        taken_location=taken_location,
     )
 
 
 async def _mark_diaries_done(
     db: AsyncSession,
-    sync_results: list[PhotoSyncResult],
+    diary_ids: list[int],
 ) -> None:
     """분석 완료 후 Diary.analysis_status를 'done'으로 업데이트"""
-    diary_ids = {r.diary_id for r in sync_results}
     for diary_id in diary_ids:
         diary = await db.get(Diary, diary_id)
         if diary:
@@ -223,10 +216,9 @@ async def _mark_diaries_done(
 
 async def _mark_diaries_failed(
     db: AsyncSession,
-    sync_results: list[PhotoSyncResult],
+    diary_ids: list[int],
 ) -> None:
     """분석 실패 후 Diary.analysis_status를 'failed'로 업데이트"""
-    diary_ids = {r.diary_id for r in sync_results}
     for diary_id in diary_ids:
         try:
             diary = await db.get(Diary, diary_id)
@@ -238,7 +230,7 @@ async def _mark_diaries_failed(
 
 
 async def _apply_top_restaurant(db: AsyncSession, diary_id: int) -> None:
-    """DiaryAnalysis에서 가장 유력한 레스토랑 정보를 Diary에 반영"""
+    """DiaryAnalysis.result[0]에서 레스토랑 정보를 Diary에 반영"""
     from app.models import DiaryAnalysis
 
     diary = await db.get(Diary, diary_id)
@@ -246,15 +238,26 @@ async def _apply_top_restaurant(db: AsyncSession, diary_id: int) -> None:
         return
 
     analysis = await db.get(DiaryAnalysis, diary_id)
-    if analysis and analysis.restaurant_candidates:
-        top = max(
-            analysis.restaurant_candidates,
-            key=lambda r: r.get("confidence", 0),
-        )
-        diary.restaurant_name = top.get("name")
-        diary.restaurant_url = top.get("url")
-        diary.road_address = top.get("road_address")
-        await db.commit()
+    if not analysis or not analysis.result:
+        return
+
+    top = analysis.result[0]
+    diary.restaurant_name = top.get("restaurant_name")
+    diary.restaurant_url = top.get("restaurant_url")
+    diary.road_address = top.get("road_address")
+    diary.category = top.get("category")
+
+    if top.get("memo"):
+        diary.note = top["memo"]
+
+    row = await db.execute(
+        select(Photo.id).where(Photo.diary_id == diary_id).order_by(Photo.id).limit(1)
+    )
+    first_photo_id = row.scalar_one_or_none()
+    if first_photo_id:
+        diary.cover_photo_id = first_photo_id
+
+    await db.commit()
 
 
 async def _notify_failure(
@@ -290,10 +293,44 @@ def _to_upload_files(
     ]
 
 
-def _create_mock_analysis_data(photo_id: int) -> AnalysisData:
+async def _run_llm_analysis(
+    db: AsyncSession,
+    diary_ids: list[int],
+) -> tuple[list[AnalysisData], list[int]]:
+    """diary_id별 LLM 병렬 분석을 수행합니다. (성공 결과, 실패 diary_ids) 반환"""
+    logger.info(f"LLM 그룹 분석 시작: {len(diary_ids)}개 그룹")
+    group_tasks = [analyze_grouped_photo_data(db, diary_id) for diary_id in diary_ids]
+    raw_results = await asyncio.gather(*group_tasks, return_exceptions=True)
+
+    analysis_results: list[AnalysisData] = []
+    failed_ids: list[int] = []
+    for diary_id, result in zip(diary_ids, raw_results, strict=True):
+        if isinstance(result, AnalysisData):
+            analysis_results.append(result)
+        else:
+            logger.warning(f"LLM 분석 실패: diary_id={diary_id}, result={result}")
+            failed_ids.append(diary_id)
+
+    logger.info(
+        f"LLM 그룹 분석 완료: 성공 {len(analysis_results)}개, 실패 {len(failed_ids)}개"
+    )
+    return analysis_results, failed_ids
+
+
+def _create_mock_analysis_results(
+    diary_ids: list[int],
+) -> list[AnalysisData]:
+    """test_mode용 mock 분석 결과 리스트를 생성합니다."""
+    logger.info(f"Mock 분석 데이터 생성: {len(diary_ids)}개 다이어리")
+    results = [_create_mock_analysis_data(diary_id) for diary_id in diary_ids]
+    logger.info("Mock 분석 데이터 생성 완료")
+    return results
+
+
+def _create_mock_analysis_data(diary_id: int) -> AnalysisData:
     """test_mode용 mock 분석 데이터 생성"""
     categories = ["한식", "일식", "중식", "양식", "카페"]
-    food_category = categories[photo_id % len(categories)]
+    food_category = categories[diary_id % len(categories)]
 
     restaurant_data = {
         "한식": [
@@ -358,42 +395,27 @@ def _create_mock_analysis_data(photo_id: int) -> AnalysisData:
         ],
     }
 
-    menu_data = {
-        "한식": [
-            {"name": "김치찌개", "price": 8000, "confidence": 0.90},
-            {"name": "된장찌개", "price": 7000, "confidence": 0.85},
-        ],
-        "일식": [
-            {"name": "스시세트", "price": 25000, "confidence": 0.88},
-            {"name": "라멘", "price": 9000, "confidence": 0.82},
-        ],
-        "중식": [
-            {"name": "짜장면", "price": 6000, "confidence": 0.92},
-            {"name": "짬뽕", "price": 7000, "confidence": 0.87},
-        ],
-        "양식": [
-            {"name": "파스타", "price": 15000, "confidence": 0.85},
-            {"name": "스테이크", "price": 35000, "confidence": 0.80},
-        ],
-        "카페": [
-            {"name": "아메리카노", "price": 4500, "confidence": 0.95},
-            {"name": "카페라떼", "price": 5000, "confidence": 0.90},
-        ],
+    tags_data = {
+        "한식": ["김치찌개", "된장찌개", "매운", "구수한", "국물"],
+        "일식": ["스시세트", "라멘", "신선한", "회", "담백한"],
+        "중식": ["짜장면", "짬뽕", "기름진", "볶음"],
+        "양식": ["파스타", "스테이크", "크림", "치즈"],
+        "카페": ["아메리카노", "카페라떼", "디저트", "달콤한"],
     }
 
-    keyword_data = {
-        "한식": ["매운", "구수한", "국물", "밥"],
-        "일식": ["신선한", "회", "면", "담백한"],
-        "중식": ["기름진", "면", "매운", "볶음"],
-        "양식": ["크림", "치즈", "고기", "와인"],
-        "카페": ["커피", "디저트", "달콤한", "음료"],
-    }
+    result = [
+        {
+            "restaurant_name": r["name"],
+            "restaurant_url": r.get("url", ""),
+            "road_address": r.get("address", ""),
+            "tags": tags_data[food_category],
+            "category": food_category,
+            "memo": f"[TEST MODE] {r['name']} 분석 결과",
+        }
+        for r in restaurant_data[food_category]
+    ]
 
     return AnalysisData(
-        photo_id=photo_id,
-        food_category=food_category,
-        restaurant_candidates=restaurant_data[food_category],
-        menu_candidates=menu_data[food_category],
-        keywords=keyword_data[food_category],
-        raw_response="[TEST MODE] Mock analysis data generated for testing",
+        diary_id=diary_id,
+        result=result,
     )

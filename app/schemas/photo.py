@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.diary import AnalysisStatus, RestaurantCandidate, TimeType
+from app.schemas.diary import AnalysisStatus, TimeType
 
 # ======================
 # Base Models
@@ -44,19 +44,6 @@ class MenuCandidate(BaseModel):
     name: str = Field(..., description="메뉴명")
     price: int | None = Field(None, description="가격", ge=0)
     confidence: float | None = Field(None, description="신뢰도 (0~1)", ge=0, le=1)
-
-
-class PhotoAnalysisResult(BaseModel):
-    """사진 분석 결과 (업로드 응답에 포함)"""
-
-    food_category: str | None = Field(None, description="음식 카테고리")
-    restaurant_candidates: list[RestaurantCandidate] = Field(
-        default=[], description="식당 후보 리스트"
-    )
-    menu_candidates: list[MenuCandidate] = Field(
-        default=[], description="메뉴 후보 리스트"
-    )
-    keywords: list[str] = Field(default=[], description="음식 키워드")
 
 
 # ======================
@@ -120,56 +107,4 @@ class BatchUploadResponse(BaseModel):
     results: list[PhotoUploadResult] = Field(
         default=[],
         description="업로드된 사진 목록 (analysis_status: processing)",
-    )
-
-
-class PhotoAnalysisResultResponse(BaseModel):
-    """
-    사진 분석 결과 응답
-
-    PhotoAnalysisResult 모델의 응답 스키마
-    """
-
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
-            "example": {
-                "photo_id": 101,
-                "food_category": "한식",
-                "restaurant_name_candidates": [
-                    {
-                        "name": "명동교자",
-                        "confidence": 0.92,
-                        "address": "서울시 중구 명동길 29",
-                        "url": "https://place.map.kakao.com/477096726",
-                        "road_address": "서울 중구 명동길 29",
-                        "zone_no": "04536",
-                    }
-                ],
-                "menu_candidates": [
-                    {"name": "칼국수", "price": 8000, "confidence": 0.95},
-                    {"name": "만두", "price": 5000, "confidence": 0.88},
-                ],
-                "keywords": ["얼큰한", "구수한", "손칼국수"],
-            }
-        },
-    )
-
-    photo_id: int = Field(..., description="사진 ID")
-    food_category: str | None = Field(None, description="음식 카테고리")
-    restaurant_name_candidates: list[RestaurantCandidate] = Field(
-        default=[], description="식당 후보 리스트"
-    )
-    menu_candidates: list[MenuCandidate] = Field(
-        default=[], description="메뉴 후보 리스트"
-    )
-    keywords: list[str] = Field(default=[], description="음식 키워드")
-
-
-class PhotoWithAnalysis(PhotoResponse):
-    """분석 결과를 포함한 사진 응답"""
-
-    analysis_status: AnalysisStatus = Field(..., description="분석 상태")
-    analysis_result: PhotoAnalysisResultResponse | None = Field(
-        None, description="분석 결과 (완료된 경우)"
     )

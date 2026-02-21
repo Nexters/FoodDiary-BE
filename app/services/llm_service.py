@@ -1,12 +1,14 @@
 """LLM 서비스 - Gemini API를 사용한 음식 이미지 분석 및 블로그 글 생성."""
 
 import asyncio
+import io
 import json
 import logging
 import re
 
 import aiofiles
 import google.generativeai as genai
+from PIL import Image
 
 from app.core.config import settings
 
@@ -24,88 +26,120 @@ TIME_TYPE_KO = {
 }
 
 
-async def analyze_food_image(image_path: str) -> dict:
+async def analyze_food_images(
+    image_paths: list[str],
+    restaurant_candidates: list[dict],
+) -> list[dict]:
     """
-    음식 이미지를 분석하여 음식 정보를 추출합니다.
+    같은 끼니의 음식 사진 여러 장을 한 번에 분석합니다.
 
     Args:
-        image_path: 분석할 이미지 파일 경로
+        image_paths: 분석할 이미지 파일 경로 목록
+        restaurant_candidates: Kakao Map에서 조회한 주변 식당 후보 목록
+            [{"name": str, "url": str, "road_address": str, ...}, ...]
 
     Returns:
-        dict: 분석 결과 (food_category, menus, keywords)
+        list[dict]: 분석 결과 객체 배열 (최대 5개)
+            각 객체: {restaurant_name, restaurant_url, road_address,
+                tags, category, memo} — restaurant 필드는 후보 원본 그대로 사용
     """
-    default_result = {
-        "food_category": "기타",
-        "menus": [],
-        "keywords": [],
-    }
-
     try:
-        # 이미지 파일 로드
-        async with aiofiles.open(image_path, "rb") as f:
-            image_data = await f.read()
+        # 이미지 로드 및 리사이즈
+        image_parts = []
+        for path in image_paths:
+            async with aiofiles.open(path, "rb") as f:
+                raw = await f.read()
+            resized = _resize_image_bytes(raw)
+            image_parts.append({"mime_type": "image/jpeg", "data": resized})
 
-        # Gemini 모델 설정 (gemini-2.0-flash 사용)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
-        # 프롬프트 작성
-        prompt = """이 음식 사진을 분석해서 다음 정보를 JSON 형식으로 추출해주세요:
+        category_options = "한식/중식/일식/양식/분식/카페·디저트/패스트푸드/기타"
+        if restaurant_candidates:
+            restaurant_list = "\n".join(
+                f"- name:{r['name']}"
+                f" url:{r.get('url', '')}"
+                f" road_address:{r.get('road_address', '')}"
+                for r in restaurant_candidates
+            )
+            n = min(len(restaurant_candidates), 5)
+            restaurant_section = (
+                f"주변 식당 후보 {len(restaurant_candidates)}개"
+                " (name/url/road_address 값은 반드시 원본 그대로 사용):\n"
+                f"{restaurant_list}\n\n"
+                f"사진과 어울리는 순으로 정확히 {n}개를 배열로 반환."
+                " 각 후보마다 객체 1개씩."
+            )
+        else:
+            restaurant_section = (
+                "주변 식당 정보 없음."
+                " restaurant_name/restaurant_url/road_address는 null."
+                " 객체 1개만 반환."
+            )
 
-1. food_category: 음식 카테고리
-   (한식, 중식, 일식, 양식, 분식, 카페/디저트, 패스트푸드, 기타 중 하나)
-2. menus: 사진에 보이는 메뉴 이름들 (리스트)
-3. keywords: 이 음식을 설명하는 키워드들 (예: 매운맛, 건강식, 고단백 등) (리스트)
-
-반드시 아래 JSON 형식으로만 응답해주세요:
-{
-    "food_category": "카테고리",
-    "menus": ["메뉴1", "메뉴2"],
-    "keywords": ["키워드1", "키워드2"]
-}"""
-
-        # API 호출
-        response = model.generate_content(
-            [
-                {"mime_type": "image/jpeg", "data": image_data},
-                prompt,
-            ]
+        prompt = (
+            f"같은 끼니 사진 {len(image_parts)}장 분석. JSON 배열만 출력.\n"
+            f"카테고리 옵션: {category_options}\n\n"
+            f"{restaurant_section}\n\n"
+            "각 객체 필드:\n"
+            "  restaurant_name: 식당명 (후보에서 선택, 없으면 null)\n"
+            "  restaurant_url: 식당 URL (후보 원본 그대로, 없으면 null)\n"
+            "  road_address: 도로명 주소 (후보 원본 그대로, 없으면 null)\n"
+            "  tags: 메뉴명·키워드 통합 리스트 (사진에서 보이는 것만)\n"
+            "  category: 음식 카테고리\n"
+            "  memo: AI 브리핑 3~5줄"
+            " (도입 한 줄 + 불릿 3~5개, 없는 내용 지어내지 말 것)\n\n"
+            f"출력 예시 (후보 {min(len(restaurant_candidates), 5)}개 반환하는 경우):\n"
+            "["
+            + ",".join(
+                f'{{"restaurant_name":"{chr(65+i)}식당",'
+                f'"restaurant_url":"https://...",'
+                f'"road_address":"서울...",'
+                f'"tags":["메뉴{i+1}"],'
+                f'"category":"한식",'
+                f'"memo":"..."}}'
+                for i in range(min(len(restaurant_candidates), 5))
+            )
+            + "]"
         )
 
-        # 응답 파싱
-        response_text = response.text.strip()
+        response = model.generate_content([*image_parts, prompt])
 
-        # JSON 블록 추출 (```json ... ``` 형식 처리)
-        if "```json" in response_text:
-            start = response_text.find("```json") + 7
-            end = response_text.find("```", start)
-            response_text = response_text[start:end].strip()
-        elif "```" in response_text:
-            start = response_text.find("```") + 3
-            end = response_text.find("```", start)
-            response_text = response_text[start:end].strip()
-
+        response_text = _extract_json_text(response.text.strip())
         result = json.loads(response_text)
 
-        # 필수 필드 검증
-        if "food_category" not in result:
-            result["food_category"] = "기타"
-        if "menus" not in result:
-            result["menus"] = []
-        if "keywords" not in result:
-            result["keywords"] = []
+        if not isinstance(result, list):
+            result = []
 
-        logger.info(f"LLM 분석 완료: {image_path}")
+        logger.info(f"그룹 LLM 분석 완료: {len(image_paths)}장, 후보 {len(result)}개")
         return result
 
     except json.JSONDecodeError as e:
-        logger.error(f"LLM 응답 JSON 파싱 실패: {e}")
-        return default_result
-    except FileNotFoundError:
-        logger.error(f"이미지 파일을 찾을 수 없음: {image_path}")
-        return default_result
+        logger.error(f"그룹 LLM 응답 JSON 파싱 실패: {e}")
+        raise
+    except FileNotFoundError as e:
+        logger.error(f"이미지 파일을 찾을 수 없음: {e}")
+        raise
     except Exception as e:
-        logger.error(f"LLM 분석 실패: {e}")
-        return default_result
+        logger.error(f"그룹 LLM 분석 실패: {e}")
+        raise
+
+
+async def generate_blog_text(diary_info: dict) -> str:
+    """
+    다이어리 정보로 네이버 맛집 블로그 스타일 글을 생성합니다.
+
+    Args:
+        diary_info: 다이어리 정보 딕셔너리
+            (식당명, 주소, 카테고리, 메모, 태그, 날짜, 끼니, URL 등)
+
+    Returns:
+        str: 생성된 블로그 본문 텍스트
+
+    Raises:
+        Exception: Gemini API 호출 실패 시
+    """
+    return await asyncio.to_thread(_generate_blog_text_sync, diary_info)
 
 
 def _generate_blog_text_sync(diary_info: dict) -> str:
@@ -113,7 +147,7 @@ def _generate_blog_text_sync(diary_info: dict) -> str:
     다이어리 정보로 네이버 맛집 블로그 스타일 글을 동기 생성합니다.
     (Gemini SDK가 동기이므로 이 함수를 asyncio.to_thread로 호출)
     """
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash")
 
     restaurant_name = diary_info.get("restaurant_name") or "이름 없는 맛집"
     road_address = diary_info.get("road_address") or ""
@@ -186,18 +220,26 @@ def _normalize_blog_text_for_paste(text: str) -> str:
     return text.strip()
 
 
-async def generate_blog_text(diary_info: dict) -> str:
-    """
-    다이어리 정보로 네이버 맛집 블로그 스타일 글을 생성합니다.
+def _extract_json_text(response_text: str) -> str:
+    """Gemini 응답에서 JSON 텍스트만 추출합니다."""
+    if "```json" in response_text:
+        start = response_text.find("```json") + 7
+        end = response_text.find("```", start)
+        return response_text[start:end].strip()
+    if "```" in response_text:
+        start = response_text.find("```") + 3
+        end = response_text.find("```", start)
+        return response_text[start:end].strip()
+    return response_text
 
-    Args:
-        diary_info: 다이어리 정보 딕셔너리
-            (식당명, 주소, 카테고리, 메모, 태그, 날짜, 끼니, URL 등)
 
-    Returns:
-        str: 생성된 블로그 본문 텍스트
-
-    Raises:
-        Exception: Gemini API 호출 실패 시
-    """
-    return await asyncio.to_thread(_generate_blog_text_sync, diary_info)
+def _resize_image_bytes(data: bytes, max_size: int = 1024) -> bytes:
+    """장축을 max_size px로 리사이즈하여 JPEG bytes 반환 (원본 비율 유지)."""
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_size:
+        ratio = max_size / max(w, h)
+        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()

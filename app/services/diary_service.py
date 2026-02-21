@@ -65,7 +65,6 @@ async def get_or_create_diary(
             diary_date=diary_datetime,
             time_type=time_type,
             photo_count=0,
-            tags=[],
         )
         db.add(diary)
         await db.commit()
@@ -108,6 +107,7 @@ async def get_diaries_by_date_range(
         .options(
             selectinload(Diary.photos),
             selectinload(Diary.cover_photo),
+            selectinload(Diary.analysis),
         )
         .order_by(Diary.diary_date, Diary.time_type)
     )
@@ -144,6 +144,7 @@ async def get_diary_by_id(
         .options(
             selectinload(Diary.photos),
             selectinload(Diary.cover_photo),
+            selectinload(Diary.analysis),
         )
     )
     result = await db.execute(stmt)
@@ -177,7 +178,7 @@ async def get_diary_by_id(
         cover_photo_id=diary.cover_photo_id,
         cover_photo_url=cover_photo_url,
         note=diary.note,
-        tags=diary.tags or [],
+        tags=_build_tags(diary.analysis),
         photo_count=diary.photo_count,
         created_at=diary.created_at,
         updated_at=diary.updated_at,
@@ -229,24 +230,27 @@ async def get_diary_analysis(
             menu_candidates=[],
         )
 
-    # 3. restaurant_candidates 변환
-    restaurant_candidates = []
-    if analysis.restaurant_candidates:
-        for r in analysis.restaurant_candidates:
-            restaurant_candidates.append(
-                RestaurantCandidate(
-                    name=r.get("name", ""),
-                    confidence=r.get("confidence"),
-                    address=r.get("address"),
-                    url=r.get("url"),
-                )
-            )
+    # 3. result 배열에서 각 후보 추출
+    result = analysis.result or []
 
-    # 4. category_candidates (이미 문자열 리스트)
-    category_candidates = analysis.category_candidates or []
+    restaurant_candidates = [
+        RestaurantCandidate(
+            name=r.get("restaurant_name", ""),
+            address=r.get("road_address"),
+            url=r.get("restaurant_url"),
+            road_address=r.get("road_address"),
+        )
+        for r in result
+        if r.get("restaurant_name")
+    ]
 
-    # 5. menu_candidates (이미 문자열 리스트)
-    menu_candidates = analysis.menu_candidates or []
+    # category_candidates: result 각 객체의 category (중복 제거)
+    category_candidates = list(
+        dict.fromkeys(r.get("category", "") for r in result if r.get("category"))
+    )
+
+    # menu_candidates: 첫 번째 후보의 tags
+    menu_candidates = result[0].get("tags", []) if result else []
 
     return DiaryAnalysisResponse(
         restaurant_candidates=restaurant_candidates,
@@ -275,6 +279,7 @@ async def update_diary(
         .options(
             selectinload(Diary.photos),
             selectinload(Diary.cover_photo),
+            selectinload(Diary.analysis),
         )
     )
     result = await db.execute(stmt)
@@ -291,8 +296,6 @@ async def update_diary(
         diary.restaurant_url = body.restaurant_url
     if body.road_address is not None:
         diary.road_address = body.road_address
-    if body.tags is not None:
-        diary.tags = body.tags
     if body.note is not None:
         diary.note = body.note
     if body.cover_photo_id is not None:
@@ -410,3 +413,10 @@ async def delete_diary(
     diary.deleted_at = datetime.now(UTC)
     await db.commit()
     return True
+
+
+def _build_tags(analysis: DiaryAnalysis | None) -> list[str]:
+    """DiaryAnalysis.result[0]의 tags 반환."""
+    if analysis is None or not analysis.result:
+        return []
+    return analysis.result[0].get("tags", [])
