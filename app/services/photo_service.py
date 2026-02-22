@@ -245,7 +245,16 @@ async def _apply_top_restaurant(db: AsyncSession, diary_id: int) -> None:
     diary.restaurant_name = top.get("restaurant_name")
     diary.restaurant_url = top.get("restaurant_url")
     diary.road_address = top.get("road_address")
-    diary.category = top.get("category")
+    _valid_categories = {
+        "korean",
+        "chinese",
+        "japanese",
+        "western",
+        "etc",
+        "home_cooked",
+    }
+    raw_cat = top.get("category")
+    diary.category = raw_cat if raw_cat in _valid_categories else None
 
     if top.get("memo"):
         diary.note = top["memo"]

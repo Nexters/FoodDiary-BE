@@ -54,6 +54,8 @@ async def analyze_food_images(
 
         model = genai.GenerativeModel("gemini-2.5-flash")
 
+        _cats = "korean, chinese, japanese, western, etc, home_cooked"
+
         if restaurant_candidates:
             restaurant_list = "\n".join(
                 f"- name:{r['name']}"
@@ -73,7 +75,8 @@ async def analyze_food_images(
         else:
             restaurant_section = (
                 "주변 식당 정보 없음."
-                " restaurant_name/restaurant_url/road_address/category는 null."
+                " restaurant_name/restaurant_url/road_address는 null."
+                f" category는 반드시 다음 6개 중 하나 → {_cats}."
                 " 객체 1개만 반환."
             )
 
@@ -85,7 +88,8 @@ async def analyze_food_images(
             "  restaurant_url: 식당 URL (후보 원본 그대로, 없으면 null)\n"
             "  road_address: 도로명 주소 (후보 원본 그대로, 없으면 null)\n"
             "  tags: 메뉴명·키워드 통합 리스트 (사진에서 보이는 것만)\n"
-            "  category: 후보 식당의 category 값 원본 그대로 (후보 없으면 null)\n"
+            f"  category: 반드시 다음 6개 중 하나만 사용 → {_cats}\n"
+            "    (후보 식당 category 참고해 분류. 집밥→home_cooked, 분류 불명→etc)\n"
             "  memo: AI 브리핑 3~5줄"
             " (도입 한 줄 + 불릿 3~5개, 없는 내용 지어내지 말 것)\n\n"
             f"출력 예시 (후보 {min(len(restaurant_candidates), 5)}개 반환하는 경우):\n"
@@ -95,7 +99,7 @@ async def analyze_food_images(
                 f'"restaurant_url":"https://...",'
                 f'"road_address":"서울...",'
                 f'"tags":["메뉴{i+1}"],'
-                f'"category":"카페",'
+                f'"category":"etc",'
                 f'"memo":"..."}}'
                 for i in range(min(len(restaurant_candidates), 5))
             )
