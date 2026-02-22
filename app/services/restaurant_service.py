@@ -81,6 +81,7 @@ async def _search_by_diary(
             name=c["restaurant_name"],
             road_address=c.get("road_address", ""),
             url=c.get("restaurant_url", ""),
+            category=c.get("category", ""),
         )
         for c in (analysis.result or [])
         if c.get("restaurant_name")
