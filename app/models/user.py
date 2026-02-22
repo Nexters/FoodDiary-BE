@@ -23,6 +23,7 @@ class User(Base, TimestampMixin):
     provider: Mapped[str] = mapped_column(String(10), nullable=False)
     provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, default="")
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
