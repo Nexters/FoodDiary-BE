@@ -178,7 +178,7 @@ async def get_diary_by_id(
         cover_photo_id=diary.cover_photo_id,
         cover_photo_url=cover_photo_url,
         note=diary.note,
-        tags=_build_tags(diary.analysis),
+        tags=_build_tags(diary),
         photo_count=diary.photo_count,
         created_at=diary.created_at,
         updated_at=diary.updated_at,
@@ -300,6 +300,8 @@ async def update_diary(
         diary.note = body.note
     if body.cover_photo_id is not None:
         diary.cover_photo_id = body.cover_photo_id
+    if body.tags is not None:
+        diary.tags = body.tags
 
     if body.photo_ids is not None:
         # 이 다이어리 소속인지 검증
@@ -415,8 +417,6 @@ async def delete_diary(
     return True
 
 
-def _build_tags(analysis: DiaryAnalysis | None) -> list[str]:
-    """DiaryAnalysis.result[0]의 tags 반환."""
-    if analysis is None or not analysis.result:
-        return []
-    return analysis.result[0].get("tags", [])
+def _build_tags(diary: Diary) -> list[str]:
+    """Diary.tags 반환."""
+    return diary.tags or []

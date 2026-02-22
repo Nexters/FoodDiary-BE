@@ -406,7 +406,7 @@ def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
         cover_photo_id=diary.cover_photo_id,
         cover_photo_url=cover_photo_url,
         note=diary.note,
-        tags=_build_tags(diary.analysis),
+        tags=_build_tags(diary),
         photo_count=diary.photo_count,
         created_at=diary.created_at,
         updated_at=diary.updated_at,

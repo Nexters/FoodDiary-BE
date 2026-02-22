@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS diaries (
     analysis_status VARCHAR(20) NOT NULL DEFAULT 'processing' CHECK (analysis_status IN ('processing', 'done', 'failed')),
     cover_photo_id INTEGER,
     note TEXT,
+    tags JSONB DEFAULT '[]'::jsonb,
     photo_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

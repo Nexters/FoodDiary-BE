@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import DiaryAnalysis
+from app.models.diary import Diary
 from app.models.photo import Photo
 from app.services.kakao_map_service import search_nearby_restaurants
 from app.services.llm_service import analyze_food_images
@@ -71,6 +72,10 @@ async def aggregate_photo_analysis_to_diary(
                 result=data.result,
             )
         )
+
+    diary = await db.get(Diary, data.diary_id)
+    if diary and data.result:
+        diary.tags = data.result[0].get("tags", [])
 
     await db.commit()
 

@@ -51,6 +51,7 @@ class DiaryUpdate(BaseModel):
     note: str | None = None
     cover_photo_id: int | None = None
     photo_ids: list[int] | None = None
+    tags: list[str] | None = None
 
 
 class DiaryConfirm(BaseModel):
