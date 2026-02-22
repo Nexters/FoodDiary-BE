@@ -42,7 +42,7 @@ class TestGetDiaries:
             diary_date=datetime(2026, 1, 19, 12, 0, tzinfo=UTC),
             time_type="lunch",
             restaurant_name="맛집",
-            category="한식",
+            category="korean",
             photo_count=2,
         )
         diary = Diary(**diary_data)
@@ -69,7 +69,7 @@ class TestGetDiaries:
         diary_item = data["diaries"][0]
         assert diary_item["time_type"] == "lunch"
         assert diary_item["restaurant_name"] == "맛집"
-        assert diary_item["category"] == "한식"
+        assert diary_item["category"] == "korean"
         assert diary_item["photo_count"] == 2
 
     @pytest.mark.asyncio
@@ -210,7 +210,7 @@ class TestGetDiaryById:
         diary_data = create_diary_data(
             user_id=user.id,
             restaurant_name="맛집",
-            category="한식",
+            category="korean",
             note="맛있었어요",
             photo_count=2,
         )
@@ -243,7 +243,7 @@ class TestGetDiaryById:
         # Then: 다이어리 정보 검증
         assert data["id"] == diary.id
         assert data["restaurant_name"] == "맛집"
-        assert data["category"] == "한식"
+        assert data["category"] == "korean"
         assert data["note"] == "맛있었어요"
         assert data["photo_count"] == 2
         assert len(data["photos"]) == 2
@@ -371,7 +371,7 @@ class TestGetDiarySuggestions:
         assert len(data["restaurant_candidates"]) == 2
         assert data["restaurant_candidates"][0]["name"] == "맛집"
         assert len(data["category_candidates"]) == 2
-        assert "한식" in data["category_candidates"]
+        assert "korean" in data["category_candidates"]
         assert len(data["menu_candidates"]) == 2
         assert "김치찌개" in data["menu_candidates"]
 
@@ -437,7 +437,7 @@ class TestUpdateDiary:
 
         # Given: 다이어리 생성
         diary_data = create_diary_data(
-            user_id=user.id, restaurant_name="옛날 식당", category="한식"
+            user_id=user.id, restaurant_name="옛날 식당", category="korean"
         )
         diary = Diary(**diary_data)
         test_db_session.add(diary)
@@ -452,7 +452,7 @@ class TestUpdateDiary:
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "restaurant_name": "새로운 식당",
-                "category": "양식",
+                "category": "western",
                 "note": "수정된 메모",
             },
         )
@@ -463,7 +463,7 @@ class TestUpdateDiary:
 
         # Then: 수정된 정보 검증
         assert data["restaurant_name"] == "새로운 식당"
-        assert data["category"] == "양식"
+        assert data["category"] == "western"
         assert data["note"] == "수정된 메모"
 
     @pytest.mark.asyncio

@@ -65,7 +65,7 @@ def create_diary_analysis_data(
                 "restaurant_url": None,
                 "road_address": "서울시 강남구",
                 "tags": ["김치찌개", "된장찌개"],
-                "category": "한식",
+                "category": "korean",
                 "memo": "",
             },
             {
@@ -73,7 +73,7 @@ def create_diary_analysis_data(
                 "restaurant_url": None,
                 "road_address": "서울시 서초구",
                 "tags": ["파스타", "스테이크"],
-                "category": "일식",
+                "category": "japanese",
                 "memo": "",
             },
         ]
@@ -112,7 +112,7 @@ def create_multiple_diaries_by_date(
                 diary_date=diary_date,
                 time_type=time_type,
                 restaurant_name=f"식당 {len(diaries) + 1}",
-                category="한식",
+                category="korean",
                 photo_count=2,
             )
         )
