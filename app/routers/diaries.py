@@ -66,7 +66,7 @@ async def get_diaries_by_date_range(
 
     **응답:**
     - 해당 범위의 다이어리 목록 (사진, 분석 상태 등 전체 필드 포함)
-    - 최대 31일 범위 제한
+    - 최대 42일 범위 제한
     """
     if test_mode:
         try:
@@ -91,10 +91,10 @@ async def get_diaries_by_date_range(
             detail="start_date must be before or equal to end_date",
         )
 
-    if (end_date - start_date).days > 31:
+    if (end_date - start_date).days > 42:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Date range must be within 31 days",
+            detail="Date range must be within 42 days",
         )
 
     diaries = await diary_service.get_diaries_by_date_range(
@@ -145,7 +145,7 @@ async def get_diaries_summary_by_date_range(
     **응답:**
     - 날짜별 사진 URL 목록만 반환
     - 다이어리가 없는 날짜도 빈 배열로 포함
-    - 최대 31일 범위 제한
+    - 최대 42일 범위 제한
     """
     if test_mode:
         try:
@@ -171,10 +171,10 @@ async def get_diaries_summary_by_date_range(
             detail="start_date must be before or equal to end_date",
         )
 
-    if (end_date - start_date).days > 31:
+    if (end_date - start_date).days > 42:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Date range must be within 31 days",
+            detail="Date range must be within 42 days",
         )
 
     diaries = await diary_service.get_diaries_by_date_range(

@@ -162,10 +162,10 @@ class TestGetDiaries:
     @pytest.mark.asyncio
     async def test_get_diaries_date_range_too_long(self, test_client, test_db_session):
         """
-        날짜 범위가 31일을 초과하면 400 에러
+        날짜 범위가 42일을 초과하면 400 에러
 
         Given: 유효한 사용자
-        When: 32일 범위로 조회
+        When: 43일 범위로 조회
         Then: 400 Bad Request
         """
         # Given: 사용자 생성
@@ -176,15 +176,15 @@ class TestGetDiaries:
 
         token = create_access_token(str(user.id), user.provider)
 
-        # When: 32일 범위로 호출
+        # When: 43일 범위로 호출
         response = await test_client.get(
-            "/diaries/summary?start_date=2026-01-01&end_date=2026-02-02",
+            "/diaries/summary?start_date=2026-01-01&end_date=2026-02-12",
             headers={"Authorization": f"Bearer {token}"},
         )
 
         # Then: 400 에러
         assert response.status_code == 400
-        assert "Date range must be within 31 days" in response.json()["detail"]
+        assert "Date range must be within 42 days" in response.json()["detail"]
 
 
 class TestGetDiaryById:
