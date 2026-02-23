@@ -142,7 +142,7 @@ async def batch_upload_photos_endpoint(
             diary_id=r.diary_id,
             time_type=r.time_type,
             image_url=f"{settings.IMAGE_BASE_URL}/{r.image_url.removeprefix('storage/')}",
-            analysis_status="processing",
+            analysis_status=r.analysis_status,
         )
         for r in sync_results
     ]

@@ -423,11 +423,14 @@ def _build_tags(diary: Diary) -> list[str]:
     return diary.tags or []
 
 
-def _merge_date_with_cover_taken_at(diary: Diary) -> date | datetime:
-    """커버 사진의 taken_at 시각이 있으면 diary_date와 합쳐 datetime으로 반환."""
-    if diary.cover_photo and diary.cover_photo.taken_at:
-        return datetime.combine(
-            diary.diary_date.date(),
-            diary.cover_photo.taken_at.time(),
-        )
-    return diary.diary_date.date()
+def _merge_date_with_cover_taken_at(diary: Diary) -> datetime:
+    """커버 사진의 taken_at 시각을 diary_date와 합쳐 datetime으로 반환.
+
+    taken_at이 없으면 00:00:00으로 반환.
+    """
+    time = (
+        diary.cover_photo.taken_at.time()
+        if diary.cover_photo and diary.cover_photo.taken_at
+        else datetime.min.time()
+    )
+    return datetime.combine(diary.diary_date.date(), time)

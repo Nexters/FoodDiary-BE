@@ -36,6 +36,7 @@ class PhotoSyncResult:
     time_type: str
     image_url: str
     is_new_diary: bool
+    analysis_status: str
 
 
 # ========================================
@@ -192,6 +193,11 @@ async def _process_single_photo(
     db.add(photo)
     diary.photo_count = (diary.photo_count or 0) + 1
 
+    await db.flush()
+
+    if diary.cover_photo_id is None:
+        diary.cover_photo_id = photo.id
+
     await db.commit()
     await db.refresh(photo)
 
@@ -201,6 +207,7 @@ async def _process_single_photo(
         time_type=time_type,
         image_url=image_url,
         is_new_diary=is_new_diary,
+        analysis_status=diary.analysis_status or "processing",
     )
 
 

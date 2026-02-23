@@ -18,8 +18,8 @@ DiaryCategory = Literal[
 class DiaryBase(BaseModel):
     """Diary 기본 스키마"""
 
-    diary_date: date | datetime = Field(
-        ..., description="일기 날짜 (커버 사진 촬영 시각 포함 가능)"
+    diary_date: datetime = Field(
+        ..., description="일기 날짜 (커버 사진 촬영 시각, 없으면 00:00:00)"
     )
     time_type: TimeType = Field(..., description="끼니 종류")
     restaurant_name: str | None = Field(None, description="식당명")
@@ -135,8 +135,8 @@ class PhotoEntry(BaseModel):
     """캘린더 뷰 사진 항목"""
 
     url: str = Field(..., description="사진 URL")
-    diary_date: date | datetime | None = Field(
-        None, description="커버 사진 촬영 시각 (없으면 null)"
+    diary_date: datetime = Field(
+        ..., description="일기 날짜 (커버 사진 촬영 시각, 없으면 00:00:00)"
     )
     road_address: str | None = Field(None, description="도로명 주소")
 

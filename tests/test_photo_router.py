@@ -25,6 +25,7 @@ def mock_photo_services(monkeypatch):
                 time_type="lunch",
                 image_url="storage/photos/test/test.jpg",
                 is_new_diary=True,
+                analysis_status="processing",
             )
         ]
 
