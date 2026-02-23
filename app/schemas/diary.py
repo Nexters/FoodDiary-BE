@@ -131,10 +131,20 @@ class DiaryWithPhotos(DiaryResponse):
     photos: list[PhotoInDiary] = Field(default=[], description="사진 목록")
 
 
-class DatePhotosEntry(BaseModel):
-    """캘린더 뷰 날짜별 사진 URL 목록"""
+class PhotoEntry(BaseModel):
+    """캘린더 뷰 사진 항목"""
 
-    photos: list[str] = Field(default=[], description="해당 날짜의 사진 URL 목록")
+    url: str = Field(..., description="사진 URL")
+    diary_date: date | datetime | None = Field(
+        None, description="커버 사진 촬영 시각 (없으면 null)"
+    )
+    road_address: str | None = Field(None, description="도로명 주소")
+
+
+class DatePhotosEntry(BaseModel):
+    """캘린더 뷰 날짜별 사진 목록"""
+
+    photos: list[PhotoEntry] = Field(default=[], description="해당 날짜의 사진 목록")
 
 
 class DiariesByDateResponse(BaseModel):
