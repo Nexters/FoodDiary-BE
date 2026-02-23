@@ -70,5 +70,6 @@ jobs:
               -e GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
               -e KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
               -e IMAGE_BASE_URL="${{ secrets.IMAGE_BASE_URL }}" \
+              -e JWT_ACCESS_TOKEN_EXPIRE_MINUTES="${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_MINUTES }}" \
               --restart unless-stopped \
               ${{ secrets.DOCKER_REPO_NAME }}/fooddiary-api:${{ github.sha }}
