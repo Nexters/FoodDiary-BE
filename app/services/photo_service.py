@@ -35,6 +35,7 @@ class PhotoSyncResult:
     diary_id: int
     time_type: str
     image_url: str
+    is_new_diary: bool
 
 
 # ========================================
@@ -175,7 +176,7 @@ async def _process_single_photo(
     await file.seek(0)
 
     time_type = classify_time_type(exif_data["taken_at"])
-    diary = await get_or_create_diary(db, user_id, target_date, time_type)
+    diary, is_new_diary = await get_or_create_diary(db, user_id, target_date, time_type)
     image_url = await save_user_photo(user_id, file)
 
     taken_location = None
@@ -199,6 +200,7 @@ async def _process_single_photo(
         diary_id=diary.id,
         time_type=time_type,
         image_url=image_url,
+        is_new_diary=is_new_diary,
     )
 
 

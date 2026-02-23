@@ -29,7 +29,7 @@ async def get_or_create_diary(
     user_id: UUID,
     diary_date: date,
     time_type: str,
-) -> Diary:
+) -> tuple[Diary, bool]:
     """
     다이어리를 조회하거나 생성합니다 (upsert).
 
@@ -43,7 +43,7 @@ async def get_or_create_diary(
         time_type: 끼니 타입 ('breakfast', 'lunch', 'dinner', 'snack')
 
     Returns:
-        Diary: 조회되거나 생성된 다이어리
+        tuple[Diary, bool]: (조회되거나 생성된 다이어리, 신규 생성 여부)
     """
     # diary_date를 datetime으로 변환 (timezone aware)
     diary_datetime = datetime.combine(diary_date, datetime.min.time(), tzinfo=UTC)
@@ -69,8 +69,9 @@ async def get_or_create_diary(
         db.add(diary)
         await db.commit()
         await db.refresh(diary)
+        return diary, True
 
-    return diary
+    return diary, False
 
 
 async def get_diaries_by_date_range(
