@@ -54,52 +54,39 @@ async def analyze_food_images(
 
         model = genai.GenerativeModel("gemini-2.5-flash")
 
+        _cats = "korean,chinese,japanese,western,etc,home_cooked"
+
         if restaurant_candidates:
             restaurant_list = "\n".join(
-                f"- name:{r['name']}"
-                f" url:{r.get('url', '')}"
-                f" road_address:{r.get('road_address', '')}"
-                f" category:{r.get('category', '')}"
+                f"{r['name']}|{r.get('url', '')}|"
+                f"{r.get('road_address', '')}|{r.get('category', '')}"
                 for r in restaurant_candidates
             )
             n = min(len(restaurant_candidates), 5)
             restaurant_section = (
-                f"주변 식당 후보 {len(restaurant_candidates)}개"
-                " (name/url/road_address/category 값은 반드시 원본 그대로 사용):\n"
-                f"{restaurant_list}\n\n"
-                f"사진과 어울리는 순으로 정확히 {n}개를 배열로 반환."
-                " 각 후보마다 객체 1개씩."
+                f"식당후보(name|url|road_address|category):\n"
+                f"{restaurant_list}\n"
+                f"어울리는 순 {n}개 반환."
             )
         else:
             restaurant_section = (
-                "주변 식당 정보 없음."
-                " restaurant_name/restaurant_url/road_address/category는 null."
-                " 객체 1개만 반환."
+                f"식당정보 없음. name/url/road_address=null."
+                f" category는 {_cats} 중 선택. 객체 1개."
             )
 
         prompt = (
-            f"같은 끼니 사진 {len(image_parts)}장 분석. JSON 배열만 출력.\n"
+            f"음식사진 {len(image_parts)}장 분석. JSON배열만 출력.\n"
             f"{restaurant_section}\n\n"
             "각 객체 필드:\n"
-            "  restaurant_name: 식당명 (후보에서 선택, 없으면 null)\n"
-            "  restaurant_url: 식당 URL (후보 원본 그대로, 없으면 null)\n"
-            "  road_address: 도로명 주소 (후보 원본 그대로, 없으면 null)\n"
-            "  tags: 메뉴명·키워드 통합 리스트 (사진에서 보이는 것만)\n"
-            "  category: 후보 식당의 category 값 원본 그대로 (후보 없으면 null)\n"
-            "  memo: AI 브리핑 3~5줄"
-            " (도입 한 줄 + 불릿 3~5개, 없는 내용 지어내지 말 것)\n\n"
-            f"출력 예시 (후보 {min(len(restaurant_candidates), 5)}개 반환하는 경우):\n"
-            "["
-            + ",".join(
-                f'{{"restaurant_name":"{chr(65+i)}식당",'
-                f'"restaurant_url":"https://...",'
-                f'"road_address":"서울...",'
-                f'"tags":["메뉴{i+1}"],'
-                f'"category":"카페",'
-                f'"memo":"..."}}'
-                for i in range(min(len(restaurant_candidates), 5))
-            )
-            + "]"
+            "  restaurant_name: 후보명|null\n"
+            "  restaurant_url: 원본값|null\n"
+            "  road_address: 원본값|null\n"
+            "  tags: 사진속 메뉴·키워드 목록\n"
+            f"  category: {_cats} 중 1개\n"
+            "    (후보 category 참고. 집밥→home_cooked, 불명→etc)\n"
+            "  memo: 브리핑 3~5줄 (도입1줄+불릿3~5개, 추측금지)\n\n"
+            '예:[{"restaurant_name":"X","restaurant_url":"...","road_address":"...",'
+            '"tags":["메뉴"],"category":"korean","memo":"..."}]'
         )
 
         response = model.generate_content([*image_parts, prompt])
@@ -110,7 +97,13 @@ async def analyze_food_images(
         if not isinstance(result, list):
             result = []
 
-        logger.info(f"그룹 LLM 분석 완료: {len(image_paths)}장, 후보 {len(result)}개")
+        usage = response.usage_metadata
+        logger.info(
+            f"그룹 LLM 분석 완료: {len(image_paths)}장, 후보 {len(result)}개 "
+            f"(입력 {usage.prompt_token_count}tok, "
+            f"출력 {usage.candidates_token_count}tok, "
+            f"합계 {usage.total_token_count}tok)"
+        )
         return result
 
     except json.JSONDecodeError as e:

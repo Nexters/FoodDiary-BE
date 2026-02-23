@@ -10,6 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 TimeType = Literal["breakfast", "lunch", "dinner", "snack"]
 AnalysisStatus = Literal["pending", "processing", "done", "failed"]
+DiaryCategory = Literal[
+    "korean", "chinese", "japanese", "western", "etc", "home_cooked"
+]
 
 
 class DiaryBase(BaseModel):
@@ -44,7 +47,7 @@ class DiaryCreate(BaseModel):
 class DiaryUpdate(BaseModel):
     """다이어리 수정 요청 스키마 (PATCH /diaries/{diary_id})"""
 
-    category: str | None = None
+    category: DiaryCategory | None = None
     restaurant_name: str | None = None
     restaurant_url: str | None = None
     road_address: str | None = None
@@ -66,7 +69,7 @@ class DiaryConfirm(BaseModel):
         json_schema_extra={
             "example": {
                 "restaurant_name": "명동교자",
-                "category": "한식",
+                "category": "korean",
                 "restaurant_url": "https://place.map.kakao.com/477096726",
                 "road_address": "서울 중구 명동길 29",
                 "note": "칼국수가 정말 맛있었다",
@@ -76,7 +79,7 @@ class DiaryConfirm(BaseModel):
     )
 
     restaurant_name: str = Field(..., description="확정된 식당명")
-    category: str = Field(..., description="확정된 음식 카테고리")
+    category: DiaryCategory = Field(..., description="확정된 음식 카테고리")
     restaurant_url: str | None = Field(None, description="식당 URL (예: 카카오맵 링크)")
     road_address: str | None = Field(None, description="도로명 주소")
     note: str | None = Field(None, description="메모")
@@ -151,7 +154,7 @@ class DiariesByDateResponse(BaseModel):
                         "restaurant_name": "명동교자",
                         "restaurant_url": "https://place.map.kakao.com/477096726",
                         "road_address": "서울 중구 명동길 29",
-                        "category": "한식",
+                        "category": "korean",
                         "cover_photo_id": 101,
                         "note": "칼국수 맛집",
                         "tags": ["칼국수", "만두"],
@@ -232,7 +235,7 @@ class DiaryAnalysisResponse(BaseModel):
     restaurant_candidates: list[RestaurantCandidate] = Field(
         default=[], description="식당 후보 리스트"
     )
-    category_candidates: list[str] = Field(
+    category_candidates: list[DiaryCategory] = Field(
         default=[], description="카테고리 후보 리스트"
     )
     menu_candidates: list[str] = Field(default=[], description="메뉴 후보 리스트")
