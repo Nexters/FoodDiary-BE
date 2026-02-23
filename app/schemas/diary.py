@@ -18,7 +18,9 @@ DiaryCategory = Literal[
 class DiaryBase(BaseModel):
     """Diary 기본 스키마"""
 
-    diary_date: date = Field(..., description="일기 날짜")
+    diary_date: date | datetime = Field(
+        ..., description="일기 날짜 (커버 사진 촬영 시각 포함 가능)"
+    )
     time_type: TimeType = Field(..., description="끼니 종류")
     restaurant_name: str | None = Field(None, description="식당명")
     restaurant_url: str | None = Field(None, description="식당 URL (예: 카카오맵 링크)")
@@ -149,7 +151,7 @@ class DiariesByDateResponse(BaseModel):
                     {
                         "id": 12,
                         "user_id": "550e8400-e29b-41d4-a716-446655440000",
-                        "diary_date": "2026-01-29",
+                        "diary_date": "2026-01-29T12:30:00",
                         "time_type": "lunch",
                         "restaurant_name": "명동교자",
                         "restaurant_url": "https://place.map.kakao.com/477096726",

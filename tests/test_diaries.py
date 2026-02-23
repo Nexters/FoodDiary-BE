@@ -178,7 +178,7 @@ class TestGetDiaries:
 
         # When: 43일 범위로 호출
         response = await test_client.get(
-            "/diaries/summary?start_date=2026-01-01&end_date=2026-02-12",
+            "/diaries/summary?start_date=2026-01-01&end_date=2026-02-13",
             headers={"Authorization": f"Bearer {token}"},
         )
 

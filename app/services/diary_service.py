@@ -156,7 +156,7 @@ async def get_diary_by_id(
     status = diary.analysis_status or "done"
     cover_photo_url = diary.get_cover_photo_url(settings.IMAGE_BASE_URL)
 
-    diary_date_only = diary.diary_date.date()
+    diary_date_only = _merge_date_with_cover_taken_at(diary)
     photos = [
         PhotoInDiary(
             photo_id=p.id,
@@ -421,3 +421,13 @@ async def delete_diary(
 def _build_tags(diary: Diary) -> list[str]:
     """Diary.tags 반환."""
     return diary.tags or []
+
+
+def _merge_date_with_cover_taken_at(diary: Diary) -> date | datetime:
+    """커버 사진의 taken_at 시각이 있으면 diary_date와 합쳐 datetime으로 반환."""
+    if diary.cover_photo and diary.cover_photo.taken_at:
+        return datetime.combine(
+            diary.diary_date.date(),
+            diary.cover_photo.taken_at.time(),
+        )
+    return diary.diary_date.date()

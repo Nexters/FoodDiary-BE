@@ -23,7 +23,7 @@ from app.schemas.diary import (
     PhotoInDiary,
 )
 from app.services import diary_service, llm_service
-from app.services.diary_service import _build_tags
+from app.services.diary_service import _build_tags, _merge_date_with_cover_taken_at
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -396,7 +396,7 @@ def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
     return DiaryWithPhotos(
         id=diary.id,
         user_id=diary.user_id,
-        diary_date=diary.diary_date.date(),
+        diary_date=_merge_date_with_cover_taken_at(diary),
         time_type=diary.time_type,
         analysis_status=status,
         restaurant_name=diary.restaurant_name,
