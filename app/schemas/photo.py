@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.diary import AnalysisStatus, TimeType
+from app.schemas.diary import AnalysisStatus
 
 # ======================
 # Base Models
@@ -62,32 +62,11 @@ class PhotoResponse(PhotoBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PhotoUploadResult(BaseModel):
-    """
-    사진 업로드 결과
+class DiaryUploadResult(BaseModel):
+    """배치 업로드 응답의 다이어리 항목"""
 
-    POST /photos/batch-upload 응답
-    - 일반 모드: 파일 저장 및 Diary 생성만 완료 (analysis_status: "processing")
-    - test_mode: 분석 결과도 포함하여 즉시 응답 (analysis_status: "done")
-    """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "photo_id": 19,
-                "diary_id": 2,
-                "time_type": "dinner",
-                "image_url": "data/photos/22a85dba-9ad1-4c87-9fa8-26cd5aefe096.JPG",
-                "analysis_status": "processing",
-            }
-        }
-    )
-
-    photo_id: int = Field(..., description="생성된 사진 ID")
-    diary_id: int = Field(..., description="연결된 다이어리 ID")
-    time_type: TimeType = Field(..., description="분류된 끼니 종류")
-    image_url: str = Field(..., description="이미지 URL")
-    analysis_status: AnalysisStatus = Field(
+    diary_id: int = Field(..., description="다이어리 ID")
+    diary_status: AnalysisStatus = Field(
         ..., description="분석 상태 (processing/done/failed)"
     )
 
@@ -100,11 +79,8 @@ class BatchUploadResponse(BaseModel):
     분석 결과는 FCM silent push로 전송됩니다.
     """
 
-    message: str = Field(
-        default="Upload received, analysis in progress",
-        description="처리 상태 메시지",
-    )
-    results: list[PhotoUploadResult] = Field(
+    diary_date: str = Field(..., description="대상 날짜 (YYYY-MM-DD)")
+    diaries: list[DiaryUploadResult] = Field(
         default=[],
-        description="업로드된 사진 목록 (analysis_status: processing)",
+        description="생성/업데이트된 다이어리 목록",
     )

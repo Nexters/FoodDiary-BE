@@ -17,11 +17,11 @@ from app.schemas.diary import (
 from app.schemas.health import HealthResponse
 from app.schemas.photo import (
     BatchUploadResponse,
+    DiaryUploadResult,
     MenuCandidate,
     PhotoBase,
     PhotoCreate,
     PhotoResponse,
-    PhotoUploadResult,
 )
 
 __all__ = [
@@ -35,6 +35,7 @@ __all__ = [
     "DiaryCreate",
     "DiaryResponse",
     "DiaryUpdate",
+    "DiaryUploadResult",
     "DiaryWithPhotos",
     "HealthResponse",
     "LoginRequest",
@@ -45,7 +46,6 @@ __all__ = [
     "PhotoCreate",
     "PhotoInDiary",
     "PhotoResponse",
-    "PhotoUploadResult",
     "RestaurantCandidate",
     "TimeType",
 ]

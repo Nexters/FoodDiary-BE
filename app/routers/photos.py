@@ -18,10 +18,9 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
-from app.schemas.photo import BatchUploadResponse, PhotoUploadResult
+from app.schemas.photo import BatchUploadResponse, DiaryUploadResult
 from app.services.photo_service import analyze_and_notify, batch_upload_photos_sync
 
 logger = logging.getLogger(__name__)
@@ -41,15 +40,9 @@ router = APIRouter(prefix="/photos", tags=["photos"])
             "content": {
                 "application/json": {
                     "example": {
-                        "message": "Upload received, analysis in progress",
-                        "results": [
-                            {
-                                "photo_id": 19,
-                                "diary_id": 2,
-                                "time_type": "dinner",
-                                "image_url": "https://mumuk.ai.kr/static/photos/uuid/uuid.jpg",
-                                "analysis_status": "processing",
-                            }
+                        "diary_date": "2026-02-24",
+                        "diaries": [
+                            {"diary_id": 2, "diary_status": "processing"},
                         ],
                     }
                 }
@@ -88,7 +81,8 @@ async def batch_upload_photos_endpoint(
     1. EXIF 파싱 → 촬영 시각 기준으로 끼니(breakfast/lunch/dinner/snack) 자동 분류
     2. Diary upsert (user_id + date + time_type 조합)
     3. 파일 저장 → Photo DB 생성
-    4. `analysis_status: "processing"` 상태로 즉시 응답 반환
+    4. `diary_status: "processing"` 상태로 즉시 응답 반환
+       (`diary_date` + `diaries` 목록)
 
     **백그라운드 단계 (비동기)**
     1. Gemini LLM으로 음식 사진 분석 (병렬)
@@ -136,18 +130,17 @@ async def batch_upload_photos_endpoint(
         target_date=target_date,
     )
 
-    results = [
-        PhotoUploadResult(
-            photo_id=r.photo_id,
-            diary_id=r.diary_id,
-            time_type=r.time_type,
-            image_url=f"{settings.IMAGE_BASE_URL}/{r.image_url.removeprefix('storage/')}",
-            analysis_status=r.analysis_status,
-        )
-        for r in sync_results
+    seen: dict[int, str] = {}
+    for r in sync_results:
+        if r.diary_id not in seen:
+            seen[r.diary_id] = r.analysis_status
+
+    diaries = [
+        DiaryUploadResult(diary_id=diary_id, diary_status=status)
+        for diary_id, status in seen.items()
     ]
 
-    return BatchUploadResponse(results=results)
+    return BatchUploadResponse(diary_date=str(target_date), diaries=diaries)
 
 
 # ========================================
@@ -216,21 +209,16 @@ async def _get_mock_batch_upload_response(
     background_tasks: BackgroundTasks,
 ) -> BatchUploadResponse:
     """test_mode용 mock 배치 업로드 응답 생성 및 백그라운드 silent push 예약"""
-    results = []
-
+    seen: dict[int, str] = {}
     for i in range(photo_count):
-        time_types = ["breakfast", "lunch", "dinner", "snack"]
-        time_type = time_types[i % len(time_types)]
+        diary_id = 20 + (i // 2)
+        if diary_id not in seen:
+            seen[diary_id] = "processing"
 
-        results.append(
-            PhotoUploadResult(
-                photo_id=100 + i,
-                diary_id=20 + (i // 2),
-                time_type=time_type,
-                image_url=f"https://picsum.photos/seed/mock{i}/400/300",
-                analysis_status="processing",
-            )
-        )
+    diaries = [
+        DiaryUploadResult(diary_id=diary_id, diary_status=status)
+        for diary_id, status in seen.items()
+    ]
 
     background_tasks.add_task(
         _send_mock_silent_push,
@@ -238,7 +226,7 @@ async def _get_mock_batch_upload_response(
         date_str=date_str,
     )
 
-    return BatchUploadResponse(results=results)
+    return BatchUploadResponse(diary_date=date_str, diaries=diaries)
 
 
 async def _send_mock_silent_push(device_id: str, date_str: str) -> None:
