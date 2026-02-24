@@ -1,5 +1,6 @@
 """Photo 라우터"""
 
+import asyncio
 import logging
 from datetime import date, datetime
 from typing import Annotated
@@ -104,7 +105,7 @@ async def batch_upload_photos_endpoint(
     ## test_mode
 
     `test_mode=true`로 요청하면 LLM 호출 없이 mock 분석 데이터를 사용하며,
-    분석 완료 후 실제 FCM silent push도 전송됩니다.
+    **응답 후 10초 뒤**에 실제 FCM silent push가 전송됩니다.
     """
     if test_mode:
         return await _get_mock_batch_upload_response(
@@ -244,7 +245,8 @@ async def _get_mock_batch_upload_response(
 
 
 async def _send_mock_silent_push(device_id: str, date_str: str) -> None:
-    """test_mode용 FCM silent push 전송"""
+    """test_mode용 FCM silent push 전송 (10초 딜레이 후 전송)"""
+    await asyncio.sleep(10)
     from app.core.database import AsyncSessionLocal
     from app.services.notification_service import send_silent_notification
 
