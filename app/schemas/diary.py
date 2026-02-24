@@ -190,22 +190,6 @@ class DiariesByDateResponse(BaseModel):
     diaries: list[DiaryWithPhotos] = Field(default=[], description="다이어리 목록")
 
 
-# ======================
-# Analysis Response Schemas
-# ======================
-
-
-class RestaurantCandidate(BaseModel):
-    """식당 후보"""
-
-    name: str = Field(..., description="식당명")
-    confidence: float | None = Field(None, description="신뢰도 (0~1)", ge=0, le=1)
-    address: str | None = Field(None, description="주소")
-    url: str | None = Field(None, description="식당 지도 URL")
-    road_address: str | None = Field(None, description="도로명 주소")
-    zone_no: str | None = Field(None, description="우편번호")
-
-
 class DiaryBlogTextResponse(BaseModel):
     """
     다이어리 기반 블로그 글 생성 응답
@@ -215,39 +199,3 @@ class DiaryBlogTextResponse(BaseModel):
     """
 
     blog_text: str = Field(..., description="생성된 블로그 포스팅 본문 텍스트")
-
-
-class DiaryAnalysisResponse(BaseModel):
-    """
-    다이어리 분석 후보 응답
-
-    GET /diaries/{diary_id}/analysis
-    "이 식당 맞나요?" 화면에서 사용
-    """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "restaurant_candidates": [
-                    {
-                        "name": "명동교자",
-                        "confidence": 0.92,
-                        "address": "서울시 중구 명동길 29",
-                        "url": "https://place.map.kakao.com/477096726",
-                        "road_address": "서울 중구 명동길 29",
-                        "zone_no": "04536",
-                    }
-                ],
-                "category_candidates": ["한식", "분식"],
-                "menu_candidates": ["칼국수", "만두", "비빔국수"],
-            }
-        }
-    )
-
-    restaurant_candidates: list[RestaurantCandidate] = Field(
-        default=[], description="식당 후보 리스트"
-    )
-    category_candidates: list[DiaryCategory] = Field(
-        default=[], description="카테고리 후보 리스트"
-    )
-    menu_candidates: list[str] = Field(default=[], description="메뉴 후보 리스트")

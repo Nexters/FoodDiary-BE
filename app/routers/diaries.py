@@ -16,14 +16,14 @@ from app.schemas.diary import (
     AddDiaryPhotosResponse,
     DatePhotosEntry,
     DiariesByDateResponse,
-    DiaryAnalysisResponse,
     DiaryBlogTextResponse,
     DiaryUpdate,
     DiaryWithPhotos,
     PhotoEntry,
     PhotoInDiary,
 )
-from app.services import diary_service, llm_service
+from app.schemas.restaurant import RestaurantListResponse
+from app.services import diary_service, llm_service, restaurant_service
 from app.services.diary_service import _build_tags, _merge_date_with_cover_taken_at
 
 logger = logging.getLogger(__name__)
@@ -238,27 +238,22 @@ async def get_diary_by_id(
     return diary
 
 
-@router.get("/{diary_id}/suggestions", response_model=DiaryAnalysisResponse)
+@router.get("/{diary_id}/suggestions", response_model=RestaurantListResponse)
 async def get_diary_suggestions(
     diary_id: int,
     db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
-    다이어리 분석 제안 조회 (식당, 카테고리, 메뉴 후보)
+    다이어리 분석 제안 조회 (식당 후보 목록)
 
     "이 식당을 찾고 계신가요?" 화면에서 사용
-    DiaryAnalysis의 restaurant_candidates, category_candidates, menu_candidates 반환
+    DiaryAnalysis.result의 각 후보를 restaurant 단위로 반환
     """
-    analysis = await diary_service.get_diary_analysis(
-        db=db, user_id=user_id, diary_id=diary_id
+    restaurants = await restaurant_service.get_diary_restaurants(
+        session=db, user_id=user_id, diary_id=diary_id
     )
-    if analysis is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Analysis not found or diary doesn't exist.",
-        )
-    return analysis
+    return RestaurantListResponse(restaurants=restaurants)
 
 
 @router.get("/{diary_id}/blog-text", response_model=DiaryBlogTextResponse)

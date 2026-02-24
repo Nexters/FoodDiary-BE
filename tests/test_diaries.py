@@ -365,15 +365,12 @@ class TestGetDiarySuggestions:
         data = response.json()
 
         # Then: 후보군 검증
-        assert "restaurant_candidates" in data
-        assert "category_candidates" in data
-        assert "menu_candidates" in data
-        assert len(data["restaurant_candidates"]) == 2
-        assert data["restaurant_candidates"][0]["name"] == "맛집"
-        assert len(data["category_candidates"]) == 2
-        assert "korean" in data["category_candidates"]
-        assert len(data["menu_candidates"]) == 2
-        assert "김치찌개" in data["menu_candidates"]
+        assert "restaurants" in data
+        assert len(data["restaurants"]) == 2
+        assert data["restaurants"][0]["name"] == "맛집"
+        assert data["restaurants"][0]["tags"] == ["김치찌개", "된장찌개"]
+        assert data["restaurants"][0]["memo"] == "한식 전문점입니다."
+        assert data["restaurants"][1]["name"] == "식당"
 
     @pytest.mark.asyncio
     async def test_get_diary_suggestions_no_analysis(
@@ -408,12 +405,10 @@ class TestGetDiarySuggestions:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        # Then: 200 OK with empty lists
+        # Then: 200 OK with empty list
         assert response.status_code == 200
         data = response.json()
-        assert data["restaurant_candidates"] == []
-        assert data["category_candidates"] == []
-        assert data["menu_candidates"] == []
+        assert data["restaurants"] == []
 
 
 class TestUpdateDiary:
