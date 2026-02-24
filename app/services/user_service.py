@@ -8,6 +8,10 @@ from app.models.user import User
 from app.utils.file_storage import delete_user_storage
 
 
+async def get_user(session: AsyncSession, user_id: UUID) -> User:
+    return await _get_active_user(session, user_id)
+
+
 async def delete_user(session: AsyncSession, user_id: UUID) -> None:
     user = await _get_active_user(session, user_id)
     delete_user_storage(user_id)

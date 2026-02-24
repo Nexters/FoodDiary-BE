@@ -5,9 +5,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
-from app.services.user_service import delete_user
+from app.schemas.user import UserResponse
+from app.services.user_service import delete_user, get_user
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="내 정보 조회",
+)
+async def get_me(
+    user_id: UUID = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+) -> UserResponse:
+    user = await get_user(session, user_id)
+    return UserResponse(name=user.name)
 
 
 @router.delete(
