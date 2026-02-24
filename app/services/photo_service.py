@@ -143,7 +143,7 @@ async def _run_analysis_pipeline(
         analysis_results = _create_mock_analysis_results(diary_ids)
         failed_ids: list[int] = []
     else:
-        analysis_results, failed_ids = await _run_llm_analysis(db, diary_ids)
+        analysis_results, failed_ids = await _run_llm_analysis(diary_ids)
 
     for data in analysis_results:
         try:
@@ -312,12 +312,11 @@ def _to_upload_files(
 
 
 async def _run_llm_analysis(
-    db: AsyncSession,
     diary_ids: list[int],
 ) -> tuple[list[AnalysisData], list[int]]:
     """diary_id별 LLM 병렬 분석을 수행합니다. (성공 결과, 실패 diary_ids) 반환"""
     logger.info(f"LLM 그룹 분석 시작: {len(diary_ids)}개 그룹")
-    group_tasks = [analyze_grouped_photo_data(db, diary_id) for diary_id in diary_ids]
+    group_tasks = [_analyze_with_new_session(diary_id) for diary_id in diary_ids]
     raw_results = await asyncio.gather(*group_tasks, return_exceptions=True)
 
     analysis_results: list[AnalysisData] = []
@@ -333,6 +332,12 @@ async def _run_llm_analysis(
         f"LLM 그룹 분석 완료: 성공 {len(analysis_results)}개, 실패 {len(failed_ids)}개"
     )
     return analysis_results, failed_ids
+
+
+async def _analyze_with_new_session(diary_id: int) -> AnalysisData | None:
+    """diary_id별 독립 세션으로 LLM 분석을 수행합니다."""
+    async with AsyncSessionLocal() as db:
+        return await analyze_grouped_photo_data(db, diary_id)
 
 
 def _create_mock_analysis_results(
