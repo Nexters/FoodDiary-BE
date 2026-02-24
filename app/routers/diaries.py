@@ -16,14 +16,15 @@ from app.schemas.diary import (
     AddDiaryPhotosResponse,
     DatePhotosEntry,
     DiariesByDateResponse,
-    DiaryAnalysisResponse,
     DiaryBlogTextResponse,
     DiaryUpdate,
     DiaryWithPhotos,
+    PhotoEntry,
     PhotoInDiary,
 )
-from app.services import diary_service, llm_service
-from app.services.diary_service import _build_tags
+from app.schemas.restaurant import RestaurantListResponse
+from app.services import diary_service, llm_service, restaurant_service
+from app.services.diary_service import _build_tags, _merge_date_with_cover_taken_at
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -32,12 +33,28 @@ router = APIRouter(prefix="/diaries", tags=["diaries"])
 DATE_RANGE_RESPONSE_EXAMPLE = {
     "2026-01-15": {
         "photos": [
-            "https://example.com/photos/1.jpg",
-            "https://example.com/photos/2.jpg",
+            {
+                "url": "https://example.com/photos/1.jpg",
+                "diary_date": "2026-01-15T12:30:00",
+                "road_address": "서울 중구 명동길 29",
+            },
+            {
+                "url": "https://example.com/photos/2.jpg",
+                "diary_date": "2026-01-15T12:30:00",
+                "road_address": "서울 중구 명동길 29",
+            },
         ]
     },
     "2026-01-16": {"photos": []},
-    "2026-01-17": {"photos": ["https://example.com/photos/3.jpg"]},
+    "2026-01-17": {
+        "photos": [
+            {
+                "url": "https://example.com/photos/3.jpg",
+                "diary_date": "2026-01-17T19:00:00",
+                "road_address": "서울 강남구 테헤란로 152",
+            }
+        ]
+    },
 }
 
 
@@ -111,7 +128,10 @@ async def get_diaries_by_date_range(
     response_model=dict[str, DatePhotosEntry],
     responses={
         200: {
-            "description": "날짜별 사진 URL 목록 (키: YYYY-MM-DD, 값: photos 배열)",
+            "description": (
+                "날짜별 사진 목록 (키: YYYY-MM-DD, 값: photos 배열 - "
+                "각 사진의 url/diary_date/road_address 포함)"
+            ),
             "content": {
                 "application/json": {
                     "example": DATE_RANGE_RESPONSE_EXAMPLE,
@@ -218,27 +238,22 @@ async def get_diary_by_id(
     return diary
 
 
-@router.get("/{diary_id}/suggestions", response_model=DiaryAnalysisResponse)
+@router.get("/{diary_id}/suggestions", response_model=RestaurantListResponse)
 async def get_diary_suggestions(
     diary_id: int,
     db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
-    다이어리 분석 제안 조회 (식당, 카테고리, 메뉴 후보)
+    다이어리 분석 제안 조회 (식당 후보 목록)
 
     "이 식당을 찾고 계신가요?" 화면에서 사용
-    DiaryAnalysis의 restaurant_candidates, category_candidates, menu_candidates 반환
+    DiaryAnalysis.result의 각 후보를 restaurant 단위로 반환
     """
-    analysis = await diary_service.get_diary_analysis(
-        db=db, user_id=user_id, diary_id=diary_id
+    restaurants = await restaurant_service.get_diary_restaurants(
+        session=db, user_id=user_id, diary_id=diary_id
     )
-    if analysis is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Analysis not found or diary doesn't exist.",
-        )
-    return analysis
+    return RestaurantListResponse(restaurants=restaurants)
 
 
 @router.get("/{diary_id}/blog-text", response_model=DiaryBlogTextResponse)
@@ -396,7 +411,7 @@ def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
     return DiaryWithPhotos(
         id=diary.id,
         user_id=diary.user_id,
-        diary_date=diary.diary_date.date(),
+        diary_date=_merge_date_with_cover_taken_at(diary),
         time_type=diary.time_type,
         analysis_status=status,
         restaurant_name=diary.restaurant_name,
@@ -427,8 +442,15 @@ def _build_date_photos_response(
         date_key = diary.diary_date.date().isoformat()
         if date_key not in response:
             response[date_key] = {"photos": []}
+        diary_date = _merge_date_with_cover_taken_at(diary)
         for p in sorted(diary.photos, key=lambda x: x.id):
-            response[date_key]["photos"].append(p.get_full_url(settings.IMAGE_BASE_URL))
+            response[date_key]["photos"].append(
+                PhotoEntry(
+                    url=p.get_full_url(settings.IMAGE_BASE_URL),
+                    diary_date=diary_date,
+                    road_address=diary.road_address,
+                )
+            )
 
     return response
 
@@ -541,15 +563,21 @@ def _get_mock_diaries_response(start_date: date, end_date: date) -> dict:
 
 
 def _get_mock_date_range_response(start_date: date, end_date: date) -> dict[str, dict]:
-    """GET /diaries/summary test_mode용 mock 응답 - 날짜별 사진 URL 목록만 반환"""
+    """GET /diaries/summary test_mode용 mock 응답 - 날짜별 사진 목록 반환"""
     result = {}
     current = start_date
 
     while current <= end_date:
         seed = int(current.strftime("%Y%m%d"))
         photo_count = _BUCKET_TO_PHOTO_COUNT[seed % 5]
+        _, _, address, _, _ = _MOCK_RESTAURANTS[seed % len(_MOCK_RESTAURANTS)]
+        noon = datetime(current.year, current.month, current.day, 12, 0)
         photos = [
-            f"https://picsum.photos/seed/{seed}{chr(97 + i)}/400/300"
+            PhotoEntry(
+                url=f"https://picsum.photos/seed/{seed}{chr(97 + i)}/400/300",
+                diary_date=noon,
+                road_address=address if photo_count > 0 else None,
+            )
             for i in range(photo_count)
         ]
         result[current.isoformat()] = {"photos": photos}

@@ -62,19 +62,19 @@ def create_diary_analysis_data(
         result = [
             {
                 "restaurant_name": "맛집",
-                "restaurant_url": None,
+                "restaurant_url": "https://place.map.kakao.com/111111111",
                 "road_address": "서울시 강남구",
                 "tags": ["김치찌개", "된장찌개"],
                 "category": "korean",
-                "memo": "",
+                "memo": "한식 전문점입니다.",
             },
             {
                 "restaurant_name": "식당",
-                "restaurant_url": None,
+                "restaurant_url": "https://place.map.kakao.com/222222222",
                 "road_address": "서울시 서초구",
                 "tags": ["파스타", "스테이크"],
                 "category": "japanese",
-                "memo": "",
+                "memo": "양식 전문점입니다.",
             },
         ]
 

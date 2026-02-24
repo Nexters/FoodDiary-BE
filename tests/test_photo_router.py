@@ -24,6 +24,8 @@ def mock_photo_services(monkeypatch):
                 diary_id=20,
                 time_type="lunch",
                 image_url="storage/photos/test/test.jpg",
+                is_new_diary=True,
+                analysis_status="processing",
             )
         ]
 
@@ -70,11 +72,10 @@ async def test_batch_upload_success(test_client, test_db_session, mock_photo_ser
     # Then
     assert response.status_code == 200
     data = response.json()
-    assert "message" in data
-    assert len(data["results"]) == 1
-    assert data["results"][0]["photo_id"] == 100
-    assert data["results"][0]["diary_id"] == 20
-    assert data["results"][0]["analysis_status"] == "processing"
+    assert data["diary_date"] == "2026-01-15"
+    assert len(data["diaries"]) == 1
+    assert data["diaries"][0]["diary_id"] == 20
+    assert data["diaries"][0]["diary_status"] == "processing"
 
 
 @pytest.mark.asyncio
