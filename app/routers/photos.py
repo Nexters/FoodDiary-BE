@@ -42,7 +42,11 @@ router = APIRouter(prefix="/photos", tags=["photos"])
                     "example": {
                         "diary_date": "2026-02-24",
                         "diaries": [
-                            {"diary_id": 2, "diary_status": "processing"},
+                            {
+                                "diary_id": 2,
+                                "diary_status": "processing",
+                                "time_type": "lunch",
+                            },
                         ],
                     }
                 }
@@ -130,14 +134,18 @@ async def batch_upload_photos_endpoint(
         target_date=target_date,
     )
 
-    seen: dict[int, str] = {}
+    seen: dict[int, tuple[str, str]] = {}
     for r in sync_results:
         if r.diary_id not in seen:
-            seen[r.diary_id] = r.analysis_status
+            seen[r.diary_id] = (r.analysis_status, r.time_type)
 
     diaries = [
-        DiaryUploadResult(diary_id=diary_id, diary_status=status)
-        for diary_id, status in seen.items()
+        DiaryUploadResult(
+            diary_id=diary_id,
+            diary_status=status,
+            time_type=time_type,
+        )
+        for diary_id, (status, time_type) in seen.items()
     ]
 
     return BatchUploadResponse(diary_date=str(target_date), diaries=diaries)
@@ -209,15 +217,21 @@ async def _get_mock_batch_upload_response(
     background_tasks: BackgroundTasks,
 ) -> BatchUploadResponse:
     """test_mode용 mock 배치 업로드 응답 생성 및 백그라운드 silent push 예약"""
-    seen: dict[int, str] = {}
+    _mock_time_types = ("breakfast", "lunch", "dinner", "snack")
+    seen: dict[int, tuple[str, str]] = {}
     for i in range(photo_count):
         diary_id = 20 + (i // 2)
         if diary_id not in seen:
-            seen[diary_id] = "processing"
+            time_type = _mock_time_types[i % len(_mock_time_types)]
+            seen[diary_id] = ("processing", time_type)
 
     diaries = [
-        DiaryUploadResult(diary_id=diary_id, diary_status=status)
-        for diary_id, status in seen.items()
+        DiaryUploadResult(
+            diary_id=diary_id,
+            diary_status=status,
+            time_type=time_type,
+        )
+        for diary_id, (status, time_type) in seen.items()
     ]
 
     background_tasks.add_task(

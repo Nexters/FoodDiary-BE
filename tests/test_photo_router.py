@@ -76,6 +76,7 @@ async def test_batch_upload_success(test_client, test_db_session, mock_photo_ser
     assert len(data["diaries"]) == 1
     assert data["diaries"][0]["diary_id"] == 20
     assert data["diaries"][0]["diary_status"] == "processing"
+    assert data["diaries"][0]["time_type"] == "lunch"
 
 
 @pytest.mark.asyncio

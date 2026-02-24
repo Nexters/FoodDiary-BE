@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.diary import AnalysisStatus
+from app.schemas.diary import AnalysisStatus, TimeType
 
 # ======================
 # Base Models
@@ -68,6 +68,9 @@ class DiaryUploadResult(BaseModel):
     diary_id: int = Field(..., description="다이어리 ID")
     diary_status: AnalysisStatus = Field(
         ..., description="분석 상태 (processing/done/failed)"
+    )
+    time_type: TimeType = Field(
+        ..., description="끼니 종류 (breakfast/lunch/dinner/snack)"
     )
 
 
