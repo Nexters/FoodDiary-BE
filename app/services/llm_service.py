@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import re
+import time
 
 import aiofiles
 import google.generativeai as genai
@@ -52,7 +53,7 @@ async def analyze_food_images(
             resized = _resize_image_bytes(raw)
             image_parts.append({"mime_type": "image/jpeg", "data": resized})
 
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
         _cats = "korean,chinese,japanese,western,etc,home_cooked"
 
@@ -84,12 +85,15 @@ async def analyze_food_images(
             "  tags: 사진속 메뉴·키워드 목록\n"
             f"  category: {_cats} 중 1개\n"
             "    (후보 category 참고. 집밥→home_cooked, 불명→etc)\n"
-            "  memo: 브리핑 3~5줄 (도입1줄+불릿3~5개, 추측금지)\n\n"
+            "  memo: 브리핑 3~5줄 (도입1줄+불릿3~5개, 추측금지)\n"
+            "각 객체의 restaurant_name은 중복 없이 서로 달라야 함.\n\n"
             '예:[{"restaurant_name":"X","restaurant_url":"...","road_address":"...",'
             '"tags":["메뉴"],"category":"korean","memo":"..."}]'
         )
 
+        t_start = time.perf_counter()
         response = model.generate_content([*image_parts, prompt])
+        elapsed = time.perf_counter() - t_start
 
         response_text = _extract_json_text(response.text.strip())
         result = json.loads(response_text)
@@ -99,10 +103,12 @@ async def analyze_food_images(
 
         usage = response.usage_metadata
         logger.info(
-            f"그룹 LLM 분석 완료: {len(image_paths)}장, 후보 {len(result)}개 "
+            f"그룹 LLM 분석 완료: {len(image_paths)}장, "
+            f"후보 {len(result)}/{len(restaurant_candidates)}개 "
             f"(입력 {usage.prompt_token_count}tok, "
             f"출력 {usage.candidates_token_count}tok, "
-            f"합계 {usage.total_token_count}tok)"
+            f"합계 {usage.total_token_count}tok, "
+            f"소요 {elapsed:.2f}s)"
         )
         return result
 
