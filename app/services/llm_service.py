@@ -1,6 +1,5 @@
 """LLM 서비스 - Gemini API를 사용한 음식 이미지 분석 및 블로그 글 생성."""
 
-import asyncio
 import io
 import json
 import logging
@@ -8,15 +7,15 @@ import re
 import time
 
 import aiofiles
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Gemini API 설정
-genai.configure(api_key=settings.GEMINI_API_KEY)
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 # 끼니 타입 한글 매핑
 TIME_TYPE_KO = {
@@ -51,9 +50,9 @@ async def analyze_food_images(
             async with aiofiles.open(path, "rb") as f:
                 raw = await f.read()
             resized = _resize_image_bytes(raw)
-            image_parts.append({"mime_type": "image/jpeg", "data": resized})
-
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+            image_parts.append(
+                types.Part.from_bytes(data=resized, mime_type="image/jpeg")
+            )
 
         _cats = "korean,chinese,japanese,western,etc,home_cooked"
 
@@ -92,7 +91,13 @@ async def analyze_food_images(
         )
 
         t_start = time.perf_counter()
-        response = model.generate_content([*image_parts, prompt])
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=[*image_parts, prompt],
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=0)
+            ),
+        )
         elapsed = time.perf_counter() - t_start
 
         response_text = _extract_json_text(response.text.strip())
@@ -137,16 +142,6 @@ async def generate_blog_text(diary_info: dict) -> str:
     Raises:
         Exception: Gemini API 호출 실패 시
     """
-    return await asyncio.to_thread(_generate_blog_text_sync, diary_info)
-
-
-def _generate_blog_text_sync(diary_info: dict) -> str:
-    """
-    다이어리 정보로 네이버 맛집 블로그 스타일 글을 동기 생성합니다.
-    (Gemini SDK가 동기이므로 이 함수를 asyncio.to_thread로 호출)
-    """
-    model = genai.GenerativeModel("gemini-2.5-flash")
-
     restaurant_name = diary_info.get("restaurant_name") or "이름 없는 맛집"
     road_address = diary_info.get("road_address") or ""
     category = diary_info.get("category") or "음식"
@@ -191,11 +186,15 @@ def _generate_blog_text_sync(diary_info: dict) -> str:
         "**규칙:** 제목 없이 본문만. 각 섹션 충분히 풀어서 작성."
     )
 
-    response = model.generate_content(prompt)
+    response = await client.aio.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        ),
+    )
     text = (response.text or "").strip()
-    # 복붙 시 네이버 블로그에서 깔끔하게 보이도록 후처리
-    text = _normalize_blog_text_for_paste(text)
-    return text
+    return _normalize_blog_text_for_paste(text)
 
 
 def _normalize_blog_text_for_paste(text: str) -> str:

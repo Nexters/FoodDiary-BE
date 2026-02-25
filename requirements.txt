@@ -20,7 +20,7 @@ email-validator==2.1.1
 Pillow>=10.4.0
 
 # AI/LLM
-google-generativeai>=0.8.6
+google-genai>=1.0.0
 
 # Firebase
 firebase-admin>=6.6.0
