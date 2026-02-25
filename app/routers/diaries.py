@@ -404,7 +404,6 @@ def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
         PhotoInDiary(
             photo_id=p.id,
             image_url=p.get_full_url(settings.IMAGE_BASE_URL),
-            analysis_status=status,
         )
         for p in sorted(diary.photos, key=lambda x: x.id)
     ]
@@ -511,7 +510,6 @@ def _mock_photos(seed: int, count: int, base_id: int) -> list[PhotoInDiary]:
         PhotoInDiary(
             photo_id=base_id + i,
             image_url=f"https://picsum.photos/seed/{seed}{chr(97 + i)}/400/300",
-            analysis_status="done",
         )
         for i in range(count)
     ]
@@ -630,12 +628,10 @@ def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
                 PhotoInDiary(
                     photo_id=95,
                     image_url="https://picsum.photos/seed/photo95/400/300",
-                    analysis_status="processing",
                 ),
                 PhotoInDiary(
                     photo_id=96,
                     image_url="https://picsum.photos/seed/photo96/400/300",
-                    analysis_status="processing",
                 ),
             ],
         )

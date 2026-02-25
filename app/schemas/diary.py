@@ -111,7 +111,6 @@ class PhotoInDiary(BaseModel):
 
     photo_id: int = Field(..., description="사진 ID")
     image_url: str = Field(..., description="사진 URL")
-    analysis_status: AnalysisStatus = Field(..., description="분석 상태")
 
 
 class AddDiaryPhotosResponse(BaseModel):
@@ -178,7 +177,6 @@ class DiariesByDateResponse(BaseModel):
                             {
                                 "photo_id": 101,
                                 "image_url": "https://...",
-                                "analysis_status": "done",
                             }
                         ],
                     }
