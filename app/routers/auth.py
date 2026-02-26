@@ -11,6 +11,7 @@ from app.core.security import create_access_token
 from app.schemas.auth import LoginRequest, LoginResponse, VerifyResponse
 from app.services.auth import (
     TokenVerificationError,
+    get_user_by_id,
     process_oauth_login,
     verify_oauth_token,
 )
@@ -200,6 +201,10 @@ async def login(
                             "summary": "잘못된 토큰 형식",
                             "value": {"detail": "토큰 형식이 올바르지 않습니다"},
                         },
+                        "user_not_found": {
+                            "summary": "존재하지 않는 사용자",
+                            "value": {"detail": "존재하지 않는 사용자입니다"},
+                        },
                     }
                 }
             },
@@ -210,6 +215,7 @@ async def login(
 )
 async def verify_token(
     user_id: UUID = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
 ) -> VerifyResponse:
     """
     JWT 토큰의 유효성을 검증합니다.
@@ -220,7 +226,8 @@ async def verify_token(
     Process:
     1. Authorization 헤더에서 Bearer 토큰 추출
     2. JWT 서명 및 만료시간 검증
-    3. 유효한 경우 성공 응답 반환
+    3. DB에서 사용자 존재 여부 확인
+    4. 유효한 경우 성공 응답 반환
 
     Returns:
         - message: 검증 결과 메시지
@@ -230,5 +237,12 @@ async def verify_token(
             - "Not authenticated": Authorization 헤더 누락
             - "유효하지 않은 토큰입니다": JWT 서명이 잘못됨
             - "토큰 형식이 올바르지 않습니다": JWT 페이로드가 잘못됨
+            - "존재하지 않는 사용자입니다": DB에 사용자 없음
     """
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="존재하지 않는 사용자입니다",
+        )
     return VerifyResponse(message="유효한 토큰입니다")

@@ -1,6 +1,7 @@
 import random
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 import httpx
 from google.auth.transport import requests as google_requests
@@ -180,6 +181,16 @@ async def verify_oauth_token(provider: OAuthProvider, id_token: str) -> tuple[st
         return claims.get("sub"), claims.get("email")
     else:
         raise TokenVerificationError(f"지원하지 않는 provider: {provider}")
+
+
+async def get_user_by_id(session: AsyncSession, user_id: UUID) -> User | None:
+    result = await session.execute(
+        select(User).where(
+            User.id == user_id,
+            User.deleted_at.is_(None),
+        )
+    )
+    return result.scalars().first()
 
 
 async def get_user_by_provider_id(
