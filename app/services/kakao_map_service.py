@@ -8,7 +8,7 @@ from app.core.config import settings
 async def search_nearby_restaurants(
     latitude: float,
     longitude: float,
-    radius: int = 500,
+    radius: int = 100,
 ) -> list[dict]:
     """
     GPS 좌표 주변의 음식점을 검색합니다.
