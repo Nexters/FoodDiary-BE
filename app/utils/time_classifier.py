@@ -29,10 +29,8 @@ def classify_time_type(taken_at: datetime | None) -> TimeType:
 
     if 5 <= hour < 10:
         return "breakfast"
-    elif 10 <= hour < 14:
+    elif 10 <= hour < 17:
         return "lunch"
-    elif 14 <= hour < 17:
-        return "snack"
     elif 17 <= hour < 22:
         return "dinner"
     else:
