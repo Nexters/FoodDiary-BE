@@ -21,7 +21,7 @@ async def search_nearby_restaurants(
     Args:
         latitude: 위도
         longitude: 경도
-        radius: 검색 반경 (미터, 기본값 500m)
+        radius: 검색 반경 (미터, 기본값 100m)
 
     Returns:
         list[dict]: 검색된 음식점 목록 (최대 675개)
