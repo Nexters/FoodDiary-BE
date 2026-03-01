@@ -199,7 +199,6 @@ async def _process_single_photo(
         diary.cover_photo_id = photo.id
 
     await db.commit()
-    await db.refresh(photo)
 
     return PhotoSyncResult(
         photo_id=photo.id,
