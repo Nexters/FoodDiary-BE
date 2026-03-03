@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -8,6 +9,7 @@ load_dotenv()
 # database.py import 전에 환경변수 설정 (모듈 레벨 엔진 생성을 위해 필요)
 os.environ.setdefault("DATABASE_URL", "postgresql://dummy:dummy@localhost/dummy")
 
+import asyncpg  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from sqlalchemy import text  # noqa: E402
@@ -22,7 +24,6 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 from app.core.config import Settings  # noqa: E402
 from app.core.database import get_session  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models.base import Base  # noqa: E402
 from app.services.auth import TokenVerificationError  # noqa: E402
 from app.services.fcm_sender import initialize_firebase  # noqa: E402
 
@@ -69,24 +70,31 @@ def postgres_container():
 async def test_db_engine(postgres_container) -> AsyncEngine:
     """비동기 테스트 DB 엔진 생성"""
     database_url = postgres_container.get_connection_url()
-    # psycopg2 driver를 asyncpg로 변경
-    async_url = database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
-    async_url = async_url.replace("postgresql://", "postgresql+asyncpg://")
+    async_url = _to_asyncpg_url(database_url)
 
-    engine = create_async_engine(
-        async_url,
-        echo=False,
-        pool_pre_ping=True,
-    )
-
-    # Create all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    engine = create_async_engine(async_url, echo=False, pool_pre_ping=True)
+    await _init_schema(database_url)
 
     yield engine
 
-    # Cleanup
     await engine.dispose()
+
+
+def _to_asyncpg_url(database_url: str) -> str:
+    return database_url.replace(
+        "postgresql+psycopg2://", "postgresql+asyncpg://"
+    ).replace("postgresql://", "postgresql+asyncpg://")
+
+
+async def _init_schema(database_url: str) -> None:
+    """init-db.sql로 스키마 생성 (partial unique index, trigger 포함)"""
+    init_sql = (Path(__file__).parent.parent / "scripts" / "init-db.sql").read_text()
+    raw_url = database_url.replace("postgresql+psycopg2://", "postgresql://")
+    conn = await asyncpg.connect(raw_url)
+    try:
+        await conn.execute(init_sql)
+    finally:
+        await conn.close()
 
 
 @pytest_asyncio.fixture
