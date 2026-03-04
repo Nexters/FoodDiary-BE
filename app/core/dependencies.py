@@ -3,7 +3,7 @@ import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core.security import decode_access_token
+from app.services.jwt import decode_access_token
 
 bearer_scheme = HTTPBearer(
     description="JWT Bearer 토큰 필요 (Authorization: Bearer <token>)"
