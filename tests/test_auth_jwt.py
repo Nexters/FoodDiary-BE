@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core.dependencies import get_current_user_id
-from app.core.security import create_access_token, decode_access_token
+from app.services.jwt import create_access_token, decode_access_token
 
 
 def make_credentials(token: str) -> HTTPAuthorizationCredentials:

@@ -7,10 +7,10 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import create_access_token
 from app.models.device import Device
 from app.models.diary import Diary
 from app.models.user import User
+from app.services.jwt import create_access_token
 from app.utils.file_storage import STORAGE_DIR
 from tests.fixtures.auth_fixtures import create_test_user_data
 

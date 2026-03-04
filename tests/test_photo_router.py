@@ -2,8 +2,8 @@
 
 import pytest
 
-from app.core.security import create_access_token
 from app.models.user import User
+from app.services.jwt import create_access_token
 from tests.fixtures.auth_fixtures import create_test_user_data
 from tests.fixtures.photo_fixtures import create_test_image_bytes
 
