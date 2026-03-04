@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models.user import User
-from app.services.auth import TokenVerificationError
+from app.services.oauth2 import TokenVerificationError
 from tests.fixtures.auth_fixtures import (
     create_login_request_payload,
     create_test_user_data,
@@ -140,7 +140,7 @@ async def test_login_missing_email_in_claims_fails(
     async def mock_verify_no_email(id_token: str, **kwargs):
         raise TokenVerificationError("필수 클레임 누락: {'email'}")
 
-    monkeypatch.setattr("app.services.auth.verify_apple_token", mock_verify_no_email)
+    monkeypatch.setattr("app.services.oauth2.verify_apple_token", mock_verify_no_email)
 
     # When: Login with token missing email
     payload = create_login_request_payload()
@@ -169,7 +169,7 @@ async def test_login_returns_valid_jwt_token(
     assert response.status_code == 200
 
     # When: Decode returned access token
-    from app.core.security import decode_access_token
+    from app.services.jwt import decode_access_token
 
     access_token = response.json()["access_token"]
     decoded = decode_access_token(access_token)

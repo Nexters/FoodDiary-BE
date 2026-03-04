@@ -25,8 +25,8 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 from app.core.config import Settings  # noqa: E402
 from app.core.database import get_session  # noqa: E402
 from app.main import app  # noqa: E402
-from app.services.auth import TokenVerificationError  # noqa: E402
 from app.services.fcm_sender import initialize_firebase  # noqa: E402
+from app.services.oauth2 import TokenVerificationError  # noqa: E402
 
 
 # Firebase 초기화 (테스트 시작 시 한 번만)
@@ -116,6 +116,18 @@ async def test_db_session(test_db_engine: AsyncEngine):
 
 
 @pytest_asyncio.fixture
+async def test_user(test_db_session: AsyncSession):
+    """기본 테스트 사용자 생성 fixture"""
+    from app.models.user import User
+    from tests.fixtures.auth_fixtures import create_test_user_data
+
+    user = User(**create_test_user_data())
+    test_db_session.add(user)
+    await test_db_session.commit()
+    return user
+
+
+@pytest_asyncio.fixture
 async def test_client(test_db_session: AsyncSession, test_settings, monkeypatch):
     """FastAPI TestClient with overridden dependencies"""
     from httpx import ASGITransport, AsyncClient
@@ -153,7 +165,7 @@ def mock_verify_apple_token_success(monkeypatch):
             "iat": 1234567890,
         }
 
-    monkeypatch.setattr("app.services.auth.verify_apple_token", mock_verify)
+    monkeypatch.setattr("app.services.oauth2.verify_apple_token", mock_verify)
 
 
 @pytest.fixture
@@ -163,7 +175,7 @@ def mock_verify_apple_token_failure(monkeypatch):
     async def mock_verify(id_token: str, **kwargs):
         raise TokenVerificationError("Invalid token signature")
 
-    monkeypatch.setattr("app.services.auth.verify_apple_token", mock_verify)
+    monkeypatch.setattr("app.services.oauth2.verify_apple_token", mock_verify)
 
 
 @pytest.fixture
@@ -182,7 +194,7 @@ def mock_verify_google_token_success(monkeypatch):
             "email_verified": True,
         }
 
-    monkeypatch.setattr("app.services.auth.verify_google_token", mock_verify)
+    monkeypatch.setattr("app.services.oauth2.verify_google_token", mock_verify)
 
 
 @pytest.fixture
@@ -192,4 +204,4 @@ def mock_verify_google_token_failure(monkeypatch):
     async def mock_verify(id_token: str, **kwargs):
         raise TokenVerificationError("Invalid Google token")
 
-    monkeypatch.setattr("app.services.auth.verify_google_token", mock_verify)
+    monkeypatch.setattr("app.services.oauth2.verify_google_token", mock_verify)
