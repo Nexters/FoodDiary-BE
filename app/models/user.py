@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, String
@@ -38,3 +38,6 @@ class User(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, provider={self.provider})>"
+
+    def update_last_login(self) -> None:
+        self.last_login_at = datetime.now(UTC)
