@@ -33,7 +33,8 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     FastAPI의 Depends에서 사용
     """
     async with AsyncSessionLocal() as session:
-        yield session
+        async with session.begin():
+            yield session
 
 
 def _parse_sql_statements(sql_content: str) -> list[str]:
