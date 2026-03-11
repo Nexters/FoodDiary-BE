@@ -102,16 +102,16 @@ class TestInsightsHappyPath:
         await test_db_session.commit()
         await test_db_session.refresh(user)
 
-        # Given: 이번 달 다이어리 (photo_count: 5, 6, 7)
+        # Given: 이번 달 다이어리 7일 (photo_count: 1,2,3,4,5,6,7 → 합계 28)
         current_diaries = create_current_month_diaries(
-            user.id, count=MIN_DIARY_THRESHOLD, base_photo_count=5
+            user.id, count=MIN_DIARY_THRESHOLD, base_photo_count=1
         )
         for diary_data in current_diaries:
             test_db_session.add(Diary(**diary_data))
 
-        # Given: 저번 달 다이어리 (photo_count: 3, 4)
+        # Given: 저번 달 다이어리 (photo_count: 3, 4 → 합계 7)
         previous_diaries = create_previous_month_diaries(
-            user.id, count=2, base_photo_count=MIN_DIARY_THRESHOLD
+            user.id, count=2, base_photo_count=3
         )
         for diary_data in previous_diaries:
             test_db_session.add(Diary(**diary_data))
@@ -131,10 +131,10 @@ class TestInsightsHappyPath:
         assert response.status_code == 200
         photo_stats = response.json()["photo_stats"]
 
-        assert photo_stats["current_month_count"] == 18  # 5+6+7
+        assert photo_stats["current_month_count"] == 28  # 1+2+3+4+5+6+7
         assert photo_stats["previous_month_count"] == 7  # 3+4
-        # 증감률: ((18-7)/7)*100 = 157.14...
-        assert photo_stats["change_rate"] == pytest.approx(157.1, abs=0.1)
+        # 증감률: ((28-7)/7)*100 = 300.0
+        assert photo_stats["change_rate"] == pytest.approx(300.0, abs=0.1)
 
     @pytest.mark.asyncio
     async def test_category_stats_most_frequent(
@@ -157,26 +157,29 @@ class TestInsightsHappyPath:
 
         now = datetime.now(UTC)
 
-        # Given: 이번 달 - 한식 2개
-        for i in range(2):
-            diary = Diary(
-                user_id=user.id,
-                diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
-                time_type="lunch",
-                category="한식",
-                photo_count=5,
+        # Given: 이번 달 - 한식 5개 (days 1-5)
+        for i in range(5):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    category="한식",
+                    photo_count=5,
+                )
             )
-            test_db_session.add(diary)
 
-        # Given: 이번 달 - 양식 1개
-        diary = Diary(
-            user_id=user.id,
-            diary_date=datetime(now.year, now.month, 10, 12, 0, tzinfo=UTC),
-            time_type="dinner",
-            category="양식",
-            photo_count=MIN_DIARY_THRESHOLD,
-        )
-        test_db_session.add(diary)
+        # Given: 이번 달 - 양식 2개 (days 6-7)
+        for i in range(2):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 6, 12, 0, tzinfo=UTC),
+                    time_type="dinner",
+                    category="양식",
+                    photo_count=3,
+                )
+            )
 
         await test_db_session.commit()
 
@@ -195,7 +198,7 @@ class TestInsightsHappyPath:
 
         # 이번 달: 한식이 가장 많음
         assert category_stats["current_month"]["top_category"] == "한식"
-        assert category_stats["current_month"]["count"] == 2
+        assert category_stats["current_month"]["count"] == 5
 
     @pytest.mark.asyncio
     async def test_deleted_diaries_excluded(
@@ -218,27 +221,29 @@ class TestInsightsHappyPath:
 
         now = datetime.now(UTC)
 
-        # Given: 이번 달 다이어리 3개 (정상)
-        for i in range(3):
-            diary = Diary(
-                user_id=user.id,
-                diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
-                time_type="lunch",
-                category="한식",
-                photo_count=5,
+        # Given: 이번 달 다이어리 7개 (정상, days 1-7)
+        for i in range(7):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    category="한식",
+                    photo_count=5,
+                )
             )
-            test_db_session.add(diary)
 
-        # Given: 이번 달 다이어리 1개 (삭제됨)
-        deleted_diary = Diary(
-            user_id=user.id,
-            diary_date=datetime(now.year, now.month, 20, 12, 0, tzinfo=UTC),
-            time_type="dinner",
-            category="한식",
-            photo_count=100,  # 큰 숫자
-            deleted_at=now,  # 삭제됨!
+        # Given: 이번 달 다이어리 1개 (삭제됨, day 20)
+        test_db_session.add(
+            Diary(
+                user_id=user.id,
+                diary_date=datetime(now.year, now.month, 20, 12, 0, tzinfo=UTC),
+                time_type="dinner",
+                category="한식",
+                photo_count=100,  # 큰 숫자
+                deleted_at=now,  # 삭제됨!
+            )
         )
-        test_db_session.add(deleted_diary)
 
         await test_db_session.commit()
 
@@ -255,8 +260,8 @@ class TestInsightsHappyPath:
         assert response.status_code == 200
         photo_stats = response.json()["photo_stats"]
 
-        # 삭제된 100장은 제외, 5*3=15장만 집계
-        assert photo_stats["current_month_count"] == 15
+        # 삭제된 100장은 제외, 5*7=35장만 집계
+        assert photo_stats["current_month_count"] == 35
 
     @pytest.mark.asyncio
     async def test_no_previous_month_data_handled(
@@ -346,7 +351,7 @@ class TestInsightsHappyPath:
 
         now = datetime.now(UTC)
 
-        # Given: 내 다이어리 (photo_count: 5+6+7=18)
+        # Given: 내 다이어리 7일 (photo_count: 5+6+7+8+9+10+11=56)
         my_diaries = create_current_month_diaries(
             my_user.id, count=MIN_DIARY_THRESHOLD, base_photo_count=5
         )
@@ -378,8 +383,8 @@ class TestInsightsHappyPath:
         assert response.status_code == 200
         photo_stats = response.json()["photo_stats"]
 
-        # 내 사진만 (5+6+7=18), 다른 사용자의 100은 제외
-        assert photo_stats["current_month_count"] == 18
+        # 내 사진만 (5+6+7+8+9+10+11=56), 다른 사용자의 100은 제외
+        assert photo_stats["current_month_count"] == 56
 
     @pytest.mark.asyncio
     async def test_skeleton_features_return_placeholder(
@@ -448,6 +453,7 @@ class TestKeywordStats:
         await test_db_session.refresh(user)
 
         now = datetime.now(UTC)
+        # 태그 있는 다이어리 3일 (days 1-3)
         tag_sets = [
             ["칼국수", "라멘"],
             ["칼국수", "라멘"],
@@ -461,6 +467,16 @@ class TestKeywordStats:
                     time_type="lunch",
                     photo_count=1,
                     tags=tags,
+                )
+            )
+        # 임계값(7일) 채우기 위한 태그 없는 다이어리 4일 (days 4-7)
+        for i in range(4):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 4, 12, 0, tzinfo=UTC),
+                    time_type="dinner",
+                    photo_count=1,
                 )
             )
 
@@ -541,6 +557,7 @@ class TestLocationStats:
         await test_db_session.refresh(user)
 
         now = datetime.now(UTC)
+        # 주소 있는 다이어리 3일 (days 1-3)
         addresses = [
             "서울 마포구 연남동 224-1",
             "서울 마포구 연남동 100",
@@ -554,6 +571,16 @@ class TestLocationStats:
                     time_type="lunch",
                     photo_count=1,
                     address_name=addr,
+                )
+            )
+        # 임계값(7일) 채우기 위한 주소 없는 다이어리 4일 (days 4-7)
+        for i in range(4):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 4, 12, 0, tzinfo=UTC),
+                    time_type="dinner",
+                    photo_count=1,
                 )
             )
 
@@ -630,6 +657,7 @@ class TestCategoryCountsAll:
         await test_db_session.refresh(user)
 
         now = datetime.now(UTC)
+        # 카테고리 있는 다이어리 3일 (days 1-3)
         for i, cat in enumerate(["korean", "korean", "japanese"]):
             test_db_session.add(
                 Diary(
@@ -638,6 +666,17 @@ class TestCategoryCountsAll:
                     time_type="lunch",
                     photo_count=1,
                     category=cat,
+                )
+            )
+        # 임계값(7일) 채우기 위한 다이어리 4일 (days 4-7)
+        for i in range(4):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 4, 12, 0, tzinfo=UTC),
+                    time_type="dinner",
+                    photo_count=1,
+                    category=None,
                 )
             )
 
@@ -715,7 +754,7 @@ class TestInsightsErrorCases:
         """
         데이터 부족 시 400 에러
 
-        Given: 이번 달 다이어리가 2개만 존재 (최소 3개 필요)
+        Given: 이번 달 6일치 다이어리만 존재 (최소 7일 필요)
         When: /me/insights 호출
         Then: 400 Bad Request
         """
@@ -725,8 +764,10 @@ class TestInsightsErrorCases:
         await test_db_session.commit()
         await test_db_session.refresh(user)
 
-        # Given: 이번 달 다이어리 2개만 (임계값 3보다 작음)
-        current_diaries = create_current_month_diaries(user.id, count=2)
+        # Given: 이번 달 6일치 다이어리 (7일 임계값 미달)
+        current_diaries = create_current_month_diaries(
+            user.id, count=MIN_DIARY_THRESHOLD - 1
+        )
         for diary_data in current_diaries:
             test_db_session.add(Diary(**diary_data))
 

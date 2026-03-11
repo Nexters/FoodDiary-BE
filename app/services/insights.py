@@ -19,7 +19,7 @@ from app.schemas.insights import (
     TopMenu,
 )
 
-MIN_DIARY_THRESHOLD = 3
+MIN_DIARY_THRESHOLD = 7
 
 _ALL_CATEGORIES = ("korean", "chinese", "japanese", "western", "etc", "home_cooked")
 _DONG_LEVEL_SUFFIXES = ("동", "리", "가", "로")
@@ -223,11 +223,12 @@ def calculate_keywords(_current_diaries: list[Diary]) -> list[str]:
 
 
 def _check_minimum_data(diaries: list[Diary]) -> None:
-    """데이터 최소 임계값 검사. 추후 로직 변경 시 이 함수만 수정."""
-    if len(diaries) < MIN_DIARY_THRESHOLD:
+    """데이터 최소 임계값 검사. 이번 달 7일 이상 기록해야 인사이트 제공."""
+    unique_days = len({d.diary_date.date() for d in diaries})
+    if unique_days < MIN_DIARY_THRESHOLD:
         raise InsufficientDataError(
-            f"최소 {MIN_DIARY_THRESHOLD}개의 다이어리가 필요합니다 "
-            f"(현재: {len(diaries)}개)"
+            f"최소 {MIN_DIARY_THRESHOLD}일의 기록이 필요합니다 "
+            f"(현재: {unique_days}일)"
         )
 
 

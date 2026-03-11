@@ -66,29 +66,48 @@ class TestExtractDong:
         assert _extract_dong("") is None
 
 
+def _make_diaries_on_distinct_days(day_count: int) -> list[Diary]:
+    """서로 다른 날짜에 각 1개씩 다이어리 생성"""
+    return [
+        _make_diary(diary_date=datetime(2025, 3, i + 1, 12, 0, tzinfo=UTC))
+        for i in range(day_count)
+    ]
+
+
 class TestCheckMinimumData:
-    """_check_minimum_data 함수 유닛 테스트"""
+    """_check_minimum_data 함수 유닛 테스트 - 이번 달 7일 기준"""
 
     def test_raises_when_below_threshold(self):
-        """임계값 미달 시 InsufficientDataError 발생"""
-        diaries = [_make_diary() for _ in range(MIN_DIARY_THRESHOLD - 1)]
+        """7일 미만이면 InsufficientDataError 발생"""
+        diaries = _make_diaries_on_distinct_days(MIN_DIARY_THRESHOLD - 1)
         with pytest.raises(InsufficientDataError):
             _check_minimum_data(diaries)
 
     def test_passes_when_at_threshold(self):
-        """임계값 이상이면 예외 없음"""
-        diaries = [_make_diary() for _ in range(MIN_DIARY_THRESHOLD)]
+        """정확히 7일이면 예외 없음"""
+        diaries = _make_diaries_on_distinct_days(MIN_DIARY_THRESHOLD)
         _check_minimum_data(diaries)  # 예외 없음
 
     def test_passes_when_above_threshold(self):
-        """임계값 초과해도 예외 없음"""
-        diaries = [_make_diary() for _ in range(MIN_DIARY_THRESHOLD + 5)]
+        """7일 초과해도 예외 없음"""
+        diaries = _make_diaries_on_distinct_days(MIN_DIARY_THRESHOLD + 5)
         _check_minimum_data(diaries)
 
     def test_raises_when_empty(self):
         """다이어리 없으면 InsufficientDataError 발생"""
         with pytest.raises(InsufficientDataError):
             _check_minimum_data([])
+
+    def test_same_day_multiple_diaries_count_as_one_day(self):
+        """같은 날 여러 끼니는 1일로 카운트 - 일기 수가 7개여도 3일이면 실패"""
+        diaries = [
+            _make_diary(
+                diary_date=datetime(2025, 3, (i // 3) + 1, 8 + (i % 3), 0, tzinfo=UTC)
+            )
+            for i in range(9)  # 9개 다이어리, 3일치
+        ]
+        with pytest.raises(InsufficientDataError):  # 3일 < 7일
+            _check_minimum_data(diaries)
 
 
 class TestCalculateKeywordStats:

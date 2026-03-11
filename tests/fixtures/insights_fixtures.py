@@ -4,10 +4,10 @@ from uuid import UUID
 
 def create_current_month_diaries(
     user_id: UUID,
-    count: int = 3,
+    count: int = 7,
     base_photo_count: int = 5,
 ) -> list[dict]:
-    """이번 달 다이어리 데이터 생성 (최소 3개)"""
+    """이번 달 다이어리 데이터 생성 (일별 1개, 기본 7일)"""
     now = datetime.now(UTC)
     current_year = now.year
     current_month = now.month
@@ -23,8 +23,8 @@ def create_current_month_diaries(
                 "diary_date": datetime(
                     current_year,
                     current_month,
-                    (i * 5) + 1,  # 1, 6, 11, ...
-                    12 + (i * 3),  # 12, 15, 18, ...
+                    i + 1,  # 1, 2, 3, ... (모든 달에서 안전)
+                    8 + (i % 12),  # 8, 9, 10, ... (유효한 시간)
                     0,
                     tzinfo=UTC,
                 ),
