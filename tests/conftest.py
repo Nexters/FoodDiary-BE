@@ -7,6 +7,7 @@ load_dotenv()
 
 # database.py import 전에 환경변수 설정 (모듈 레벨 엔진 생성을 위해 필요)
 os.environ.setdefault("DATABASE_URL", "postgresql://dummy:dummy@localhost/dummy")
+os.environ.setdefault("GEMINI_API_KEY", "dummy_gemini_key_for_tests")
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
