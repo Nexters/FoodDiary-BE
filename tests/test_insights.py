@@ -426,6 +426,283 @@ class TestInsightsHappyPath:
         assert data["keywords"] == []
 
 
+class TestKeywordStats:
+    """키워드 통계 통합 테스트"""
+
+    @pytest.mark.asyncio
+    async def test_keyword_stats_counted_and_sorted(
+        self,
+        test_client,
+        test_db_session,
+    ):
+        """
+        키워드 빈도 집계 및 내림차순 정렬 검증
+
+        Given: 이번 달 다이어리 3개 (칼국수 3회, 라멘 2회, 만두 1회)
+        When: /me/insights 호출
+        Then: keyword_stats가 내림차순 정렬되어 반환
+        """
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        now = datetime.now(UTC)
+        tag_sets = [
+            ["칼국수", "라멘"],
+            ["칼국수", "라멘"],
+            ["칼국수", "만두"],
+        ]
+        for i, tags in enumerate(tag_sets):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    photo_count=1,
+                    tags=tags,
+                )
+            )
+
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        response = await test_client.get(
+            "/me/insights",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        keyword_stats = response.json()["keyword_stats"]
+
+        counts = [k["count"] for k in keyword_stats]
+        assert counts == sorted(counts, reverse=True)
+
+        keyword_map = {k["keyword"]: k["count"] for k in keyword_stats}
+        assert keyword_map["칼국수"] == 3
+        assert keyword_map["라멘"] == 2
+        assert keyword_map["만두"] == 1
+
+    @pytest.mark.asyncio
+    async def test_keyword_stats_empty_when_no_tags(
+        self,
+        test_client,
+        test_db_session,
+    ):
+        """
+        태그 없으면 keyword_stats는 빈 리스트
+
+        Given: 이번 달 다이어리 3개 (모두 태그 없음)
+        When: /me/insights 호출
+        Then: keyword_stats == []
+        """
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        current_diaries = create_current_month_diaries(
+            user.id, count=MIN_DIARY_THRESHOLD
+        )
+        for diary_data in current_diaries:
+            test_db_session.add(Diary(**diary_data))
+
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        response = await test_client.get(
+            "/me/insights",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["keyword_stats"] == []
+
+
+class TestLocationStats:
+    """장소(동) 통계 통합 테스트"""
+
+    @pytest.mark.asyncio
+    async def test_location_stats_extracted_from_address_name(
+        self,
+        test_client,
+        test_db_session,
+    ):
+        """
+        address_name에서 동을 추출해 빈도 집계
+
+        Given: 이번 달 연남동 2회, 역삼동 1회
+        When: /me/insights 호출
+        Then: location_stats에 동별 카운트 반환
+        """
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        now = datetime.now(UTC)
+        addresses = [
+            "서울 마포구 연남동 224-1",
+            "서울 마포구 연남동 100",
+            "서울 강남구 역삼동 50-1",
+        ]
+        for i, addr in enumerate(addresses):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    photo_count=1,
+                    address_name=addr,
+                )
+            )
+
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        response = await test_client.get(
+            "/me/insights",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        location_stats = response.json()["location_stats"]
+
+        dong_map = {s["dong"]: s["count"] for s in location_stats}
+        assert dong_map["연남동"] == 2
+        assert dong_map["역삼동"] == 1
+
+    @pytest.mark.asyncio
+    async def test_location_stats_empty_when_no_address_name(
+        self,
+        test_client,
+        test_db_session,
+    ):
+        """
+        address_name 없으면 location_stats는 빈 리스트
+
+        Given: 이번 달 다이어리 3개 (모두 address_name 없음)
+        When: /me/insights 호출
+        Then: location_stats == []
+        """
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        current_diaries = create_current_month_diaries(
+            user.id, count=MIN_DIARY_THRESHOLD
+        )
+        for diary_data in current_diaries:
+            test_db_session.add(Diary(**diary_data))
+
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        response = await test_client.get(
+            "/me/insights",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["location_stats"] == []
+
+
+class TestCategoryCountsAll:
+    """카테고리 전체 카운트 통합 테스트"""
+
+    @pytest.mark.asyncio
+    async def test_category_counts_all_present_with_defaults(
+        self,
+        test_client,
+        test_db_session,
+    ):
+        """
+        모든 카테고리 카운트 반환 (미등장 카테고리는 0)
+
+        Given: 이번 달 korean 2개, japanese 1개
+        When: /me/insights 호출
+        Then: current_month_counts에 6개 카테고리 모두 포함, 미등장은 0
+        """
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        now = datetime.now(UTC)
+        for i, cat in enumerate(["korean", "korean", "japanese"]):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    photo_count=1,
+                    category=cat,
+                )
+            )
+
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        response = await test_client.get(
+            "/me/insights",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        counts = response.json()["category_stats"]["current_month_counts"]
+
+        assert counts["korean"] == 2
+        assert counts["japanese"] == 1
+        assert counts["chinese"] == 0
+        assert counts["western"] == 0
+        assert counts["etc"] == 0
+        assert counts["home_cooked"] == 0
+
+    @pytest.mark.asyncio
+    async def test_category_counts_all_zero_when_no_category(
+        self,
+        test_client,
+        test_db_session,
+    ):
+        """
+        카테고리 없는 다이어리만 있으면 모든 카운트 0
+
+        Given: 이번 달 다이어리 category=None
+        When: /me/insights 호출
+        Then: current_month_counts 모두 0
+        """
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        now = datetime.now(UTC)
+        for i in range(MIN_DIARY_THRESHOLD):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, i + 1, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    photo_count=1,
+                    category=None,
+                )
+            )
+
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        response = await test_client.get(
+            "/me/insights",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        counts = response.json()["category_stats"]["current_month_counts"]
+        for count in counts.values():
+            assert count == 0
+
+
 class TestInsightsErrorCases:
     """에러 케이스 (30%: Happy Path가 아닌 경우)"""
 
