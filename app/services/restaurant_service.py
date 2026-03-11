@@ -81,6 +81,7 @@ async def _search_by_keyword(
         RestaurantItem(
             name=r["name"],
             road_address=r["road_address"],
+            address_name=r.get("address_name") or None,
             url=r["url"],
             category=r.get("category", ""),
         )

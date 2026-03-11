@@ -21,6 +21,9 @@ class RestaurantItem(BaseModel):
     category: str = Field(default="", description="음식점 카테고리")
     tags: list[str] = Field(default=[], description="메뉴/태그")
     memo: str | None = Field(None, description="LLM 분석 메모")
+    address_name: str | None = Field(
+        None, description="지번 주소 (예: 서울 마포구 연남동 224-1)"
+    )
 
 
 class RestaurantListResponse(BaseModel):

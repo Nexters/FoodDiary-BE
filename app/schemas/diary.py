@@ -53,6 +53,7 @@ class DiaryUpdate(BaseModel):
     restaurant_name: str | None = None
     restaurant_url: str | None = None
     road_address: str | None = None
+    address_name: str | None = None
     note: str | None = None
     cover_photo_id: int | None = None
     photo_ids: list[int] | None = None

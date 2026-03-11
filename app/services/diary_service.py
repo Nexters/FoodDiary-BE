@@ -217,6 +217,8 @@ async def update_diary(
         diary.restaurant_url = body.restaurant_url
     if body.road_address is not None:
         diary.road_address = body.road_address
+    if body.address_name is not None:
+        diary.address_name = body.address_name
     if body.note is not None:
         diary.note = body.note
     if body.cover_photo_id is not None:
