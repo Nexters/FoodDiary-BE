@@ -127,6 +127,7 @@ async def search_restaurants_by_keyword(
                 {
                     "name": place["place_name"],
                     "road_address": place.get("road_address_name", ""),
+                    "address_name": place.get("address_name", ""),
                     "url": place.get("place_url", ""),
                     "category": place.get("category_name", "").split(" > ")[-1],
                 }

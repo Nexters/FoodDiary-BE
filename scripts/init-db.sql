@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS diaries (
     restaurant_name VARCHAR(255),
     restaurant_url VARCHAR(500),
     road_address TEXT,
+    address_name VARCHAR(255),
     category VARCHAR(100),
     analysis_status VARCHAR(20) NOT NULL DEFAULT 'processing' CHECK (analysis_status IN ('processing', 'done', 'failed')),
     cover_photo_id INTEGER,
@@ -74,6 +75,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS unique_user_date_time_active
 -- Diaries 테이블 컬럼 설명
 COMMENT ON COLUMN diaries.restaurant_url IS '식당 URL (예: 카카오맵 링크 https://place.map.kakao.com/xxxxx)';
 COMMENT ON COLUMN diaries.road_address IS '도로명 주소 (예: 서울 중구 명동길 29)';
+COMMENT ON COLUMN diaries.address_name IS '지번 주소 (예: 서울 마포구 연남동 224-1) — 동 수준 통계용';
 
 -- ======================
 -- DiaryAnalysis 테이블

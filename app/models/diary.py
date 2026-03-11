@@ -31,6 +31,7 @@ class Diary(Base):
     restaurant_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     restaurant_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     road_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    address_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     analysis_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="processing"

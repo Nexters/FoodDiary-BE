@@ -7,16 +7,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.diary import Diary
 from app.schemas.insights import (
+    CategoryCounts,
     CategoryInfo,
     CategoryStats,
     DiaryTimeStats,
-    HourlyDistribution,
     InsightsResponse,
+    KeywordStat,
+    LocationStat,
     PhotoStats,
+    TimeSlotDistribution,
     TopMenu,
 )
 
-MIN_DIARY_THRESHOLD = 3
+MIN_DIARY_THRESHOLD = 7
+
+_ALL_CATEGORIES = ("korean", "chinese", "japanese", "western", "etc", "home_cooked")
+_DONG_LEVEL_SUFFIXES = ("동", "리", "가", "로")
 
 
 class InsufficientDataError(Exception):
@@ -42,22 +48,18 @@ async def generate_insights(
     Raises:
         InsufficientDataError: 데이터가 부족한 경우
     """
-    # 현재 날짜 기준으로 이번 달/저번 달 계산 (한국 시간 KST, UTC+9)
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
     current_year = now.year
     current_month = now.month
 
-    # 이번 달 범위
     current_range = get_month_date_range(current_year, current_month)
 
-    # 저번 달 범위
     if current_month == 1:
         previous_range = get_month_date_range(current_year - 1, 12)
     else:
         previous_range = get_month_date_range(current_year, current_month - 1)
 
-    # 이번 달 데이터 조회
     current_result = await session.execute(
         select(Diary).where(
             Diary.user_id == user_id,
@@ -68,7 +70,6 @@ async def generate_insights(
     )
     current_diaries = list(current_result.scalars().all())
 
-    # 저번 달 데이터 조회
     previous_result = await session.execute(
         select(Diary).where(
             Diary.user_id == user_id,
@@ -79,21 +80,16 @@ async def generate_insights(
     )
     previous_diaries = list(previous_result.scalars().all())
 
-    # 최소 데이터 확인
-    if len(current_diaries) < MIN_DIARY_THRESHOLD:
-        raise InsufficientDataError(
-            f"최소 {MIN_DIARY_THRESHOLD}개의 다이어리가 필요합니다 "
-            f"(현재: {len(current_diaries)}개)"
-        )
+    _check_minimum_data(current_diaries)
 
-    # 메모리에서 통계 계산
     photo_stats = calculate_photo_stats(current_diaries, previous_diaries)
     category_stats = calculate_category_stats(current_diaries, previous_diaries)
+    keyword_stats = calculate_keyword_stats(current_diaries)
+    location_stats = calculate_location_stats(current_diaries)
     time_stats = calculate_diary_time_stats(current_diaries)
     top_menu = calculate_top_menu(current_diaries)
     keywords = calculate_keywords(current_diaries)
 
-    # 응답 조합
     return InsightsResponse(
         month=f"{current_year:04d}-{current_month:02d}",
         photo_stats=photo_stats,
@@ -101,6 +97,8 @@ async def generate_insights(
         top_menu=top_menu,
         diary_time_stats=time_stats,
         keywords=keywords,
+        keyword_stats=keyword_stats,
+        location_stats=location_stats,
     )
 
 
@@ -108,26 +106,16 @@ def calculate_photo_stats(
     current_diaries: list[Diary],
     previous_diaries: list[Diary],
 ) -> PhotoStats:
-    """
-    사진 통계 계산 (이번 달 vs 저번 달)
-
-    Args:
-        current_diaries: 이번 달 다이어리 목록
-        previous_diaries: 저번 달 다이어리 목록
-
-    Returns:
-        PhotoStats 모델
-    """
+    """사진 통계 계산 (이번 달 vs 저번 달)"""
     current_count = sum(d.photo_count for d in current_diaries)
     previous_count = sum(d.photo_count for d in previous_diaries)
 
-    # 증감률 계산
     if previous_count > 0:
         change_rate = ((current_count - previous_count) / previous_count) * 100
     elif current_count > 0:
-        change_rate = 100.0  # 0에서 증가한 경우 100%
+        change_rate = 100.0
     else:
-        change_rate = 0.0  # 둘 다 0인 경우
+        change_rate = 0.0
 
     return PhotoStats(
         current_month_count=current_count,
@@ -140,122 +128,137 @@ def calculate_category_stats(
     current_diaries: list[Diary],
     previous_diaries: list[Diary],
 ) -> CategoryStats:
-    """
-    카테고리 통계 계산 (가장 많이 먹은 카테고리)
+    """카테고리 통계 계산 (최다 카테고리 + 전체 카운트)"""
+    current_counter: Counter = Counter(
+        d.category for d in current_diaries if d.category
+    )
+    previous_counter: Counter = Counter(
+        d.category for d in previous_diaries if d.category
+    )
 
-    Args:
-        current_diaries: 이번 달 다이어리 목록
-        previous_diaries: 저번 달 다이어리 목록
-
-    Returns:
-        CategoryStats 모델
-    """
-    # 이번 달 카테고리 카운트
-    current_counter = Counter(d.category for d in current_diaries)
     if current_counter:
-        top_category, count = current_counter.most_common(1)[0]
-        current_info = CategoryInfo(top_category=top_category, count=count)
+        top_cat, cnt = current_counter.most_common(1)[0]
+        current_info = CategoryInfo(top_category=top_cat, count=cnt)
     else:
         current_info = CategoryInfo(top_category="데이터 없음", count=0)
 
-    # 저번 달 카테고리 카운트
-    previous_counter = Counter(d.category for d in previous_diaries)
     if previous_counter:
-        top_category, count = previous_counter.most_common(1)[0]
-        previous_info = CategoryInfo(top_category=top_category, count=count)
+        top_cat, cnt = previous_counter.most_common(1)[0]
+        previous_info = CategoryInfo(top_category=top_cat, count=cnt)
     else:
         previous_info = CategoryInfo(top_category="데이터 없음", count=0)
+
+    current_counts = CategoryCounts(
+        **{cat: current_counter.get(cat, 0) for cat in _ALL_CATEGORIES}
+    )
 
     return CategoryStats(
         current_month=current_info,
         previous_month=previous_info,
+        current_month_counts=current_counts,
     )
+
+
+def calculate_keyword_stats(current_diaries: list[Diary]) -> list[KeywordStat]:
+    """이번 달 태그 빈도 집계 (다이어리당 중복 제거 후 상위 10개)"""
+    keyword_counter: Counter = Counter()
+    for diary in current_diaries:
+        for tag in set(diary.tags or []):
+            keyword_counter[tag] += 1
+
+    return [
+        KeywordStat(keyword=kw, count=cnt)
+        for kw, cnt in keyword_counter.most_common(10)
+    ]
+
+
+def calculate_location_stats(current_diaries: list[Diary]) -> list[LocationStat]:
+    """이번 달 동 수준 장소 통계 (상위 10개)"""
+    dong_counter: Counter = Counter()
+    for diary in current_diaries:
+        if diary.address_name:
+            dong = _extract_dong(diary.address_name)
+            if dong:
+                dong_counter[dong] += 1
+
+    return [
+        LocationStat(dong=dong, count=cnt) for dong, cnt in dong_counter.most_common(10)
+    ]
 
 
 def calculate_diary_time_stats(current_diaries: list[Diary]) -> DiaryTimeStats:
-    """
-    일기 작성 시간대 통계 계산
-
-    Args:
-        current_diaries: 이번 달 다이어리 목록
-
-    Returns:
-        DiaryTimeStats 모델
-    """
+    """일기 작성 시간대 통계 계산 (30분 단위)"""
     if not current_diaries:
-        return DiaryTimeStats(
-            most_active_hour=12,
-            distribution=[],
-        )
+        return DiaryTimeStats(most_active_time="12:00", distribution=[])
 
-    # 시간대별 카운트
-    hour_counter = Counter(d.diary_date.hour for d in current_diaries)
-
-    # 가장 활발한 시간대
-    most_active_hour = hour_counter.most_common(1)[0][0]
-
-    # 분포 배열 생성 (시간순 정렬)
+    slot_counter: Counter = Counter(
+        f"{d.diary_date.hour:02d}:{(d.diary_date.minute // 30) * 30:02d}"
+        for d in current_diaries
+    )
+    most_active_time = slot_counter.most_common(1)[0][0]
     distribution = [
-        HourlyDistribution(hour=hour, count=count)
-        for hour, count in sorted(hour_counter.items())
+        TimeSlotDistribution(time=slot, count=count)
+        for slot, count in slot_counter.most_common(5)
     ]
 
-    return DiaryTimeStats(
-        most_active_hour=most_active_hour,
-        distribution=distribution,
-    )
+    return DiaryTimeStats(most_active_time=most_active_time, distribution=distribution)
 
 
-def calculate_top_menu(current_diaries: list[Diary]) -> TopMenu:
+def calculate_top_menu(_current_diaries: list[Diary]) -> TopMenu:
     """
     가장 많이 먹은 메뉴 계산 (뼈대만 구현)
 
-    TODO: Gemini API를 사용해 note 필드에서 메뉴명 추출하거나
-          tags 배열에서 메뉴 정보 추출
-
-    Args:
-        current_diaries: 이번 달 다이어리 목록
-
-    Returns:
-        TopMenu 모델 (현재는 placeholder)
+    TODO: tags 배열에서 메뉴 정보 추출
     """
     return TopMenu(name="구현 예정", count=0)
 
 
-def calculate_keywords(current_diaries: list[Diary]) -> list[str]:
+def calculate_keywords(_current_diaries: list[Diary]) -> list[str]:
     """
     사용자와 어울리는 키워드 생성 (뼈대만 구현)
 
     TODO: 식사 패턴, 카테고리, 태그를 분석하여 키워드 생성
-          예: "혼밥러", "야식러버", "카페투어", "맛집탐방", "건강식러버"
-
-    Args:
-        current_diaries: 이번 달 다이어리 목록
-
-    Returns:
-        키워드 리스트 (현재는 빈 리스트)
     """
     return []
 
 
+def _check_minimum_data(diaries: list[Diary]) -> None:
+    """데이터 최소 임계값 검사. 이번 달 7일 이상 기록해야 인사이트 제공."""
+    unique_days = len({d.diary_date.date() for d in diaries})
+    if unique_days < MIN_DIARY_THRESHOLD:
+        raise InsufficientDataError(
+            f"최소 {MIN_DIARY_THRESHOLD}일의 기록이 필요합니다 "
+            f"(현재: {unique_days}일)"
+        )
+
+
+def _extract_dong(address_name: str) -> str | None:
+    """지번 주소에서 동 수준 행정 단위 추출.
+
+    지번(숫자 시작 토큰) 바로 앞 단어를 가져오고,
+    동과 같은 급(동·리·가·로)으로 끝나는 경우 반환.
+
+    예:
+        '서울 마포구 연남동 224-1'      → '연남동'  (동)
+        '경기 양평군 양서면 양수리 456'  → '양수리'  (리)
+        '서울 강남구 역삼로 123'        → None (도로명은 동 수준 아님)
+    """
+    tokens = address_name.split()
+    for i, token in enumerate(tokens):
+        if token and token[0].isdigit():
+            if i > 0 and tokens[i - 1].endswith(_DONG_LEVEL_SUFFIXES):
+                return tokens[i - 1]
+            return None
+    if tokens and tokens[-1].endswith(_DONG_LEVEL_SUFFIXES):
+        return tokens[-1]
+    return None
+
+
 def get_month_date_range(year: int, month: int) -> tuple[datetime, datetime]:
-    """
-    주어진 년월의 시작일시와 종료일시를 반환 (KST 기준)
-
-    Args:
-        year: 년도
-        month: 월 (1-12)
-
-    Returns:
-        (시작 datetime, 종료 datetime) 튜플
-        KST 기준으로 계산되어 UTC로 변환됨
-    """
+    """주어진 년월의 시작일시와 종료일시를 반환 (KST 기준)"""
     kst = timezone(timedelta(hours=9))
-
-    # KST 기준으로 해당 월의 1일 00:00:00
     start_date = datetime(year, month, 1, tzinfo=kst)
 
-    # 다음 달 1일 계산 (KST 기준)
     if month == 12:
         end_date = datetime(year + 1, 1, 1, tzinfo=kst)
     else:
