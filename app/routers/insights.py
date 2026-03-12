@@ -14,11 +14,12 @@ from app.schemas.insights import (
     CategoryStats,
     DiaryTimeStats,
     InsightsResponse,
-    KeywordStat,
     LocationStat,
     PhotoStats,
+    TagStat,
     TimeSlotDistribution,
-    TopMenu,
+    WeeklyStats,
+    WeekStat,
 )
 from app.services.insights import InsufficientDataError, generate_insights
 
@@ -64,26 +65,6 @@ async def get_user_insights(
 
 def _get_mock_insights() -> InsightsResponse:
     categories = ["korean", "chinese", "japanese", "western", "etc", "home_cooked"]
-    all_keywords = [
-        "혼밥러",
-        "야식러버",
-        "카페투어",
-        "맛집탐방",
-        "건강식",
-        "디저트헌터",
-        "라멘마니아",
-        "편의점고수",
-    ]
-    all_menus = [
-        "마라샹궈",
-        "삼겹살",
-        "라멘",
-        "파스타",
-        "초밥",
-        "치킨",
-        "국밥",
-        "샐러드",
-    ]
     all_dongs = [
         "연남동",
         "역삼동",
@@ -94,7 +75,7 @@ def _get_mock_insights() -> InsightsResponse:
         "성수동",
         "망원동",
     ]
-    all_keyword_words = [
+    all_tag_words = [
         "칼국수",
         "라멘",
         "파스타",
@@ -127,6 +108,9 @@ def _get_mock_insights() -> InsightsResponse:
         for slot in sample_slots
     ]
 
+    week_counts = [random.randint(0, 10) for _ in range(4)]
+    most_active_week = week_counts.index(max(week_counts)) + 1
+
     now = datetime.now()
     return InsightsResponse(
         month=now.strftime("%Y-%m"),
@@ -152,15 +136,19 @@ def _get_mock_insights() -> InsightsResponse:
                 home_cooked=category_counts_values[5],
             ),
         ),
-        top_menu=TopMenu(name=random.choice(all_menus), count=random.randint(2, 8)),
+        weekly_stats=WeeklyStats(
+            most_active_week=most_active_week,
+            weekly_counts=[
+                WeekStat(week=i + 1, count=week_counts[i]) for i in range(4)
+            ],
+        ),
         diary_time_stats=DiaryTimeStats(
             most_active_time=most_active_slot,
             distribution=distribution,
         ),
-        keywords=random.sample(all_keywords, k=random.randint(3, 5)),
-        keyword_stats=[
-            KeywordStat(keyword=kw, count=random.randint(1, 6))
-            for kw in random.sample(all_keyword_words, k=random.randint(3, 5))
+        tag_stats=[
+            TagStat(keyword=tag, count=random.randint(1, 6))
+            for tag in random.sample(all_tag_words, k=random.randint(3, 5))
         ],
         location_stats=[
             LocationStat(dong=dong, count=random.randint(1, 8))

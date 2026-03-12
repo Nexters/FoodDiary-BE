@@ -12,11 +12,12 @@ from app.schemas.insights import (
     CategoryStats,
     DiaryTimeStats,
     InsightsResponse,
-    KeywordStat,
     LocationStat,
     PhotoStats,
+    TagStat,
     TimeSlotDistribution,
-    TopMenu,
+    WeeklyStats,
+    WeekStat,
 )
 
 MIN_DIARY_THRESHOLD = 7
@@ -84,20 +85,18 @@ async def generate_insights(
 
     photo_stats = calculate_photo_stats(current_diaries, previous_diaries)
     category_stats = calculate_category_stats(current_diaries, previous_diaries)
-    keyword_stats = calculate_keyword_stats(current_diaries)
+    tag_stats = calculate_tag_stats(current_diaries)
     location_stats = calculate_location_stats(current_diaries)
     time_stats = calculate_diary_time_stats(current_diaries)
-    top_menu = calculate_top_menu(current_diaries)
-    keywords = calculate_keywords(current_diaries)
+    weekly_stats = calculate_weekly_stats(current_diaries)
 
     return InsightsResponse(
         month=f"{current_year:04d}-{current_month:02d}",
         photo_stats=photo_stats,
         category_stats=category_stats,
-        top_menu=top_menu,
+        weekly_stats=weekly_stats,
         diary_time_stats=time_stats,
-        keywords=keywords,
-        keyword_stats=keyword_stats,
+        tag_stats=tag_stats,
         location_stats=location_stats,
     )
 
@@ -159,17 +158,14 @@ def calculate_category_stats(
     )
 
 
-def calculate_keyword_stats(current_diaries: list[Diary]) -> list[KeywordStat]:
+def calculate_tag_stats(current_diaries: list[Diary]) -> list[TagStat]:
     """이번 달 태그 빈도 집계 (다이어리당 중복 제거 후 상위 10개)"""
-    keyword_counter: Counter = Counter()
+    tag_counter: Counter = Counter()
     for diary in current_diaries:
         for tag in set(diary.tags or []):
-            keyword_counter[tag] += 1
+            tag_counter[tag] += 1
 
-    return [
-        KeywordStat(keyword=kw, count=cnt)
-        for kw, cnt in keyword_counter.most_common(10)
-    ]
+    return [TagStat(keyword=tag, count=cnt) for tag, cnt in tag_counter.most_common(10)]
 
 
 def calculate_location_stats(current_diaries: list[Diary]) -> list[LocationStat]:
@@ -204,22 +200,20 @@ def calculate_diary_time_stats(current_diaries: list[Diary]) -> DiaryTimeStats:
     return DiaryTimeStats(most_active_time=most_active_time, distribution=distribution)
 
 
-def calculate_top_menu(_current_diaries: list[Diary]) -> TopMenu:
-    """
-    가장 많이 먹은 메뉴 계산 (뼈대만 구현)
+def calculate_weekly_stats(current_diaries: list[Diary]) -> WeeklyStats:
+    """이번 달 주차별 다이어리 수 계산"""
+    week_counter: Counter = Counter()
+    for diary in current_diaries:
+        week_num = (diary.diary_date.day - 1) // 7 + 1
+        week_counter[week_num] += 1
 
-    TODO: tags 배열에서 메뉴 정보 추출
-    """
-    return TopMenu(name="구현 예정", count=0)
+    most_active_week = week_counter.most_common(1)[0][0] if week_counter else 1
+    weekly_counts = [
+        WeekStat(week=w, count=week_counter.get(w, 0))
+        for w in sorted(week_counter.keys())
+    ]
 
-
-def calculate_keywords(_current_diaries: list[Diary]) -> list[str]:
-    """
-    사용자와 어울리는 키워드 생성 (뼈대만 구현)
-
-    TODO: 식사 패턴, 카테고리, 태그를 분석하여 키워드 생성
-    """
-    return []
+    return WeeklyStats(most_active_week=most_active_week, weekly_counts=weekly_counts)
 
 
 def _check_minimum_data(diaries: list[Diary]) -> None:

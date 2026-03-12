@@ -14,8 +14,9 @@ from app.services.insights import (
     _check_minimum_data,
     _extract_dong,
     calculate_diary_time_stats,
-    calculate_keyword_stats,
     calculate_location_stats,
+    calculate_tag_stats,
+    calculate_weekly_stats,
 )
 
 
@@ -110,8 +111,8 @@ class TestCheckMinimumData:
             _check_minimum_data(diaries)
 
 
-class TestCalculateKeywordStats:
-    """calculate_keyword_stats 함수 유닛 테스트"""
+class TestCalculateTagStats:
+    """calculate_tag_stats 함수 유닛 테스트"""
 
     def test_counts_tags_across_diaries(self):
         """여러 다이어리에 걸쳐 태그 빈도 집계"""
@@ -120,12 +121,12 @@ class TestCalculateKeywordStats:
             _make_diary(tags=["칼국수", "라멘"]),
             _make_diary(tags=["만두"]),
         ]
-        result = calculate_keyword_stats(diaries)
+        result = calculate_tag_stats(diaries)
 
-        keyword_map = {s.keyword: s.count for s in result}
-        assert keyword_map["칼국수"] == 2
-        assert keyword_map["만두"] == 2
-        assert keyword_map["라멘"] == 1
+        tag_map = {s.keyword: s.count for s in result}
+        assert tag_map["칼국수"] == 2
+        assert tag_map["만두"] == 2
+        assert tag_map["라멘"] == 1
 
     def test_deduplicates_tags_within_diary(self):
         """한 다이어리 내 중복 태그는 1회로 계산"""
@@ -133,7 +134,7 @@ class TestCalculateKeywordStats:
             _make_diary(tags=["칼국수", "칼국수", "칼국수"]),
             _make_diary(tags=["칼국수"]),
         ]
-        result = calculate_keyword_stats(diaries)
+        result = calculate_tag_stats(diaries)
 
         assert result[0].keyword == "칼국수"
         assert result[0].count == 2  # 다이어리 2개에 등장
@@ -148,7 +149,7 @@ class TestCalculateKeywordStats:
             _make_diary(tags=["B"]),
             _make_diary(tags=["C"]),
         ]
-        result = calculate_keyword_stats(diaries)
+        result = calculate_tag_stats(diaries)
 
         counts = [s.count for s in result]
         assert counts == sorted(counts, reverse=True)
@@ -156,13 +157,13 @@ class TestCalculateKeywordStats:
     def test_returns_top_10_at_most(self):
         """최대 10개만 반환"""
         diaries = [_make_diary(tags=[f"태그{i}"]) for i in range(11)]
-        result = calculate_keyword_stats(diaries)
+        result = calculate_tag_stats(diaries)
         assert len(result) <= 10
 
     def test_empty_tags_returns_empty(self):
         """태그 없는 다이어리만 있으면 빈 리스트 반환"""
         diaries = [_make_diary(tags=[]), _make_diary(tags=None)]
-        result = calculate_keyword_stats(diaries)
+        result = calculate_tag_stats(diaries)
         assert result == []
 
 
@@ -297,3 +298,51 @@ class TestCalculateLocationStats:
         ]
         result = calculate_location_stats(diaries)
         assert len(result) <= 10
+
+
+class TestCalculateWeeklyStats:
+    """calculate_weekly_stats 함수 유닛 테스트"""
+
+    def test_week_numbers_calculated_correctly(self):
+        """주차 계산 정확성 검증 (1~7일=1주, 8~14일=2주, ...)"""
+        diaries = [
+            _make_diary(diary_date=datetime(2025, 3, 1, 12, 0, tzinfo=UTC)),  # 1주
+            _make_diary(diary_date=datetime(2025, 3, 7, 12, 0, tzinfo=UTC)),  # 1주
+            _make_diary(diary_date=datetime(2025, 3, 8, 12, 0, tzinfo=UTC)),  # 2주
+            _make_diary(diary_date=datetime(2025, 3, 14, 12, 0, tzinfo=UTC)),  # 2주
+            _make_diary(diary_date=datetime(2025, 3, 15, 12, 0, tzinfo=UTC)),  # 3주
+        ]
+        result = calculate_weekly_stats(diaries)
+
+        week_map = {w.week: w.count for w in result.weekly_counts}
+        assert week_map[1] == 2
+        assert week_map[2] == 2
+        assert week_map[3] == 1
+
+    def test_most_active_week_is_highest_count(self):
+        """most_active_week는 가장 많이 올린 주차"""
+        diaries = [
+            _make_diary(diary_date=datetime(2025, 3, 1, 12, 0, tzinfo=UTC)),  # 1주
+            _make_diary(diary_date=datetime(2025, 3, 8, 12, 0, tzinfo=UTC)),  # 2주
+            _make_diary(diary_date=datetime(2025, 3, 9, 12, 0, tzinfo=UTC)),  # 2주
+            _make_diary(diary_date=datetime(2025, 3, 10, 12, 0, tzinfo=UTC)),  # 2주
+        ]
+        result = calculate_weekly_stats(diaries)
+        assert result.most_active_week == 2
+
+    def test_weekly_counts_sorted_by_week_asc(self):
+        """weekly_counts는 주차 오름차순 정렬"""
+        diaries = [
+            _make_diary(diary_date=datetime(2025, 3, 22, 12, 0, tzinfo=UTC)),  # 4주
+            _make_diary(diary_date=datetime(2025, 3, 8, 12, 0, tzinfo=UTC)),  # 2주
+            _make_diary(diary_date=datetime(2025, 3, 1, 12, 0, tzinfo=UTC)),  # 1주
+        ]
+        result = calculate_weekly_stats(diaries)
+        weeks = [w.week for w in result.weekly_counts]
+        assert weeks == sorted(weeks)
+
+    def test_empty_diaries_returns_default(self):
+        """다이어리 없으면 most_active_week=1, weekly_counts=[]"""
+        result = calculate_weekly_stats([])
+        assert result.most_active_week == 1
+        assert result.weekly_counts == []

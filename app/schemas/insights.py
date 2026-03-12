@@ -37,10 +37,10 @@ class CategoryStats(BaseModel):
     )
 
 
-class KeywordStat(BaseModel):
-    """키워드 통계 항목"""
+class TagStat(BaseModel):
+    """태그 통계 항목"""
 
-    keyword: str = Field(..., description="키워드")
+    keyword: str = Field(..., description="태그")
     count: int = Field(..., description="등장한 다이어리 수")
 
 
@@ -49,13 +49,6 @@ class LocationStat(BaseModel):
 
     dong: str = Field(..., description="동 이름 (예: 연남동)")
     count: int = Field(..., description="해당 동에서 식사한 횟수")
-
-
-class TopMenu(BaseModel):
-    """가장 많이 먹은 메뉴"""
-
-    name: str = Field(..., description="메뉴명")
-    count: int = Field(..., description="먹은 횟수")
 
 
 class TimeSlotDistribution(BaseModel):
@@ -73,6 +66,22 @@ class DiaryTimeStats(BaseModel):
     )
     distribution: list[TimeSlotDistribution] = Field(
         ..., description="30분 단위 시간대별 작성 빈도 (상위 5개, 횟수 내림차순)"
+    )
+
+
+class WeekStat(BaseModel):
+    """주차별 통계 항목"""
+
+    week: int = Field(..., description="주차 (1~5)")
+    count: int = Field(..., description="해당 주에 올린 다이어리 수")
+
+
+class WeeklyStats(BaseModel):
+    """주간 통계"""
+
+    most_active_week: int = Field(..., description="가장 많이 올린 주차 (1~5)")
+    weekly_counts: list[WeekStat] = Field(
+        ..., description="주차별 다이어리 수 (오름차순)"
     )
 
 
@@ -100,7 +109,15 @@ class InsightsResponse(BaseModel):
                         "home_cooked": 0,
                     },
                 },
-                "top_menu": {"name": "마라샹궈", "count": 5},
+                "weekly_stats": {
+                    "most_active_week": 2,
+                    "weekly_counts": [
+                        {"week": 1, "count": 3},
+                        {"week": 2, "count": 8},
+                        {"week": 3, "count": 5},
+                        {"week": 4, "count": 6},
+                    ],
+                },
                 "diary_time_stats": {
                     "most_active_time": "21:00",
                     "distribution": [
@@ -111,8 +128,7 @@ class InsightsResponse(BaseModel):
                         {"time": "21:00", "count": 15},
                     ],
                 },
-                "keywords": ["혼밥러", "야식러버", "카페투어", "맛집탐방"],
-                "keyword_stats": [
+                "tag_stats": [
                     {"keyword": "칼국수", "count": 4},
                     {"keyword": "라멘", "count": 3},
                 ],
@@ -127,12 +143,9 @@ class InsightsResponse(BaseModel):
     month: str = Field(..., description="통계 대상 월 (YYYY-MM)")
     photo_stats: PhotoStats = Field(..., description="사진 통계")
     category_stats: CategoryStats = Field(..., description="카테고리 통계")
-    top_menu: TopMenu = Field(..., description="가장 많이 먹은 메뉴")
+    weekly_stats: WeeklyStats = Field(..., description="주간 통계")
     diary_time_stats: DiaryTimeStats = Field(..., description="일기 작성 시간대 분포")
-    keywords: list[str] = Field(..., description="사용자와 가장 잘 어울리는 키워드들")
-    keyword_stats: list[KeywordStat] = Field(
-        ..., description="이번 달 상위 키워드 (최대 10개)"
-    )
+    tag_stats: list[TagStat] = Field(..., description="이번 달 상위 태그 (최대 10개)")
     location_stats: list[LocationStat] = Field(
         ..., description="이번 달 동별 식사 횟수 (최대 10개)"
     )

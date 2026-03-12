@@ -74,9 +74,10 @@ class TestInsightsHappyPath:
         assert "month" in data
         assert "photo_stats" in data
         assert "category_stats" in data
-        assert "top_menu" in data
+        assert "weekly_stats" in data
         assert "diary_time_stats" in data
-        assert "keywords" in data
+        assert "tag_stats" in data
+        assert "location_stats" in data
 
         # Then: month 형식 검증
         now = datetime.now(UTC)
@@ -386,66 +387,22 @@ class TestInsightsHappyPath:
         # 내 사진만 (5+6+7+8+9+10+11=56), 다른 사용자의 100은 제외
         assert photo_stats["current_month_count"] == 56
 
+
+class TestTagStats:
+    """태그 통계 통합 테스트"""
+
     @pytest.mark.asyncio
-    async def test_skeleton_features_return_placeholder(
+    async def test_tag_stats_counted_and_sorted(
         self,
         test_client,
         test_db_session,
     ):
         """
-        뼈대 기능 플레이스홀더 검증
-
-        Given: 정상 데이터 존재
-        When: /me/insights 호출
-        Then: top_menu는 "구현 예정", keywords는 빈 배열
-        """
-        # Given: 사용자 + 다이어리
-        user = User(**create_test_user_data())
-        test_db_session.add(user)
-        await test_db_session.commit()
-        await test_db_session.refresh(user)
-
-        current_diaries = create_current_month_diaries(
-            user.id, count=MIN_DIARY_THRESHOLD
-        )
-        for diary_data in current_diaries:
-            test_db_session.add(Diary(**diary_data))
-
-        await test_db_session.commit()
-
-        token = create_access_token(str(user.id), user.provider)
-
-        # When
-        response = await test_client.get(
-            "/me/insights",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-        # Then
-        assert response.status_code == 200
-        data = response.json()
-
-        # 뼈대 기능
-        assert data["top_menu"]["name"] == "구현 예정"
-        assert data["top_menu"]["count"] == 0
-        assert data["keywords"] == []
-
-
-class TestKeywordStats:
-    """키워드 통계 통합 테스트"""
-
-    @pytest.mark.asyncio
-    async def test_keyword_stats_counted_and_sorted(
-        self,
-        test_client,
-        test_db_session,
-    ):
-        """
-        키워드 빈도 집계 및 내림차순 정렬 검증
+        태그 빈도 집계 및 내림차순 정렬 검증
 
         Given: 이번 달 다이어리 3개 (칼국수 3회, 라멘 2회, 만두 1회)
         When: /me/insights 호출
-        Then: keyword_stats가 내림차순 정렬되어 반환
+        Then: tag_stats가 내림차순 정렬되어 반환
         """
         user = User(**create_test_user_data())
         test_db_session.add(user)
@@ -489,28 +446,28 @@ class TestKeywordStats:
         )
 
         assert response.status_code == 200
-        keyword_stats = response.json()["keyword_stats"]
+        tag_stats = response.json()["tag_stats"]
 
-        counts = [k["count"] for k in keyword_stats]
+        counts = [k["count"] for k in tag_stats]
         assert counts == sorted(counts, reverse=True)
 
-        keyword_map = {k["keyword"]: k["count"] for k in keyword_stats}
-        assert keyword_map["칼국수"] == 3
-        assert keyword_map["라멘"] == 2
-        assert keyword_map["만두"] == 1
+        tag_map = {k["keyword"]: k["count"] for k in tag_stats}
+        assert tag_map["칼국수"] == 3
+        assert tag_map["라멘"] == 2
+        assert tag_map["만두"] == 1
 
     @pytest.mark.asyncio
-    async def test_keyword_stats_empty_when_no_tags(
+    async def test_tag_stats_empty_when_no_tags(
         self,
         test_client,
         test_db_session,
     ):
         """
-        태그 없으면 keyword_stats는 빈 리스트
+        태그 없으면 tag_stats는 빈 리스트
 
         Given: 이번 달 다이어리 3개 (모두 태그 없음)
         When: /me/insights 호출
-        Then: keyword_stats == []
+        Then: tag_stats == []
         """
         user = User(**create_test_user_data())
         test_db_session.add(user)
@@ -532,7 +489,68 @@ class TestKeywordStats:
         )
 
         assert response.status_code == 200
-        assert response.json()["keyword_stats"] == []
+        assert response.json()["tag_stats"] == []
+
+
+class TestWeeklyStats:
+    """주간 통계 통합 테스트"""
+
+    @pytest.mark.asyncio
+    async def test_weekly_stats_counted_by_week(
+        self,
+        test_client,
+        test_db_session,
+    ):
+        """
+        주차별 다이어리 수 집계 검증
+
+        Given: 이번 달 1주차 3개, 2주차 4개 다이어리
+        When: /me/insights 호출
+        Then: weekly_stats에 주차별 카운트 반환, most_active_week == 2
+        """
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        now = datetime.now(UTC)
+
+        # 1주차 (day 1-3)
+        for day in range(1, 4):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, day, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    photo_count=1,
+                )
+            )
+        # 2주차 (day 8-11)
+        for day in range(8, 12):
+            test_db_session.add(
+                Diary(
+                    user_id=user.id,
+                    diary_date=datetime(now.year, now.month, day, 12, 0, tzinfo=UTC),
+                    time_type="lunch",
+                    photo_count=1,
+                )
+            )
+
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        response = await test_client.get(
+            "/me/insights",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        weekly_stats = response.json()["weekly_stats"]
+
+        assert weekly_stats["most_active_week"] == 2
+        week_map = {w["week"]: w["count"] for w in weekly_stats["weekly_counts"]}
+        assert week_map[1] == 3
+        assert week_map[2] == 4
 
 
 class TestLocationStats:
