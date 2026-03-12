@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.diary import Diary
 from app.schemas.insights import (
@@ -62,7 +63,9 @@ async def generate_insights(
         previous_range = get_month_date_range(current_year, current_month - 1)
 
     current_result = await session.execute(
-        select(Diary).where(
+        select(Diary)
+        .options(selectinload(Diary.cover_photo))
+        .where(
             Diary.user_id == user_id,
             Diary.diary_date >= current_range[0],
             Diary.diary_date < current_range[1],
@@ -183,12 +186,20 @@ def calculate_location_stats(current_diaries: list[Diary]) -> list[LocationStat]
 
 
 def calculate_diary_time_stats(current_diaries: list[Diary]) -> DiaryTimeStats:
-    """일기 작성 시간대 통계 계산 (30분 단위)"""
+    """일기 작성 시간대 통계 계산 (30분 단위)
+
+    cover_photo.taken_at 기준, 없으면 diary_date fallback
+    """
     if not current_diaries:
         return DiaryTimeStats(most_active_time="12:00", distribution=[])
 
+    def _get_time(d: Diary) -> datetime:
+        if d.cover_photo and d.cover_photo.taken_at:
+            return d.cover_photo.taken_at
+        return d.diary_date
+
     slot_counter: Counter = Counter(
-        f"{d.diary_date.hour:02d}:{(d.diary_date.minute // 30) * 30:02d}"
+        f"{_get_time(d).hour:02d}:{(_get_time(d).minute // 30) * 30:02d}"
         for d in current_diaries
     )
     most_active_time = slot_counter.most_common(1)[0][0]

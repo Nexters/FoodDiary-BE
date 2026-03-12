@@ -3,6 +3,7 @@ services/insights.py 서비스 함수 유닛 테스트 (DB 불필요)
 """
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -22,6 +23,7 @@ from app.services.insights import (
 
 def _make_diary(**kwargs) -> Diary:
     """DB 없이 테스트용 Diary 인스턴스 생성"""
+    cover_photo = kwargs.pop("cover_photo", None)
     defaults = {
         "user_id": uuid4(),
         "diary_date": datetime(2025, 3, 1, 12, 0, tzinfo=UTC),
@@ -32,7 +34,14 @@ def _make_diary(**kwargs) -> Diary:
         "address_name": None,
     }
     defaults.update(kwargs)
-    return Diary(**defaults)
+    diary = Diary(**defaults)
+    diary.cover_photo = cover_photo
+    return diary
+
+
+def _make_photo(taken_at: datetime | None = None) -> SimpleNamespace:
+    """DB 없이 테스트용 Photo stub 생성"""
+    return SimpleNamespace(taken_at=taken_at)
 
 
 class TestExtractDong:
@@ -176,18 +185,19 @@ class TestCalculateDiaryTimeStats:
         assert result.most_active_time == "12:00"
         assert result.distribution == []
 
-    def test_time_slot_bucketed_to_30_min(self):
-        """시간대를 30분 단위로 버킷"""
+    def test_uses_cover_photo_taken_at(self):
+        """cover_photo.taken_at이 있으면 해당 시간 기준으로 집계"""
         diaries = [
-            _make_diary(diary_date=datetime(2025, 3, 1, 12, 10, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 12, 45, tzinfo=UTC)),
+            _make_diary(
+                diary_date=datetime(2025, 3, 1, 9, 0, tzinfo=UTC),
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 19, 30, tzinfo=UTC)),
+            ),
         ]
         result = calculate_diary_time_stats(diaries)
-        slots = {s.time for s in result.distribution}
-        assert slots == {"12:00", "12:30"}
+        assert result.most_active_time == "19:30"
 
-    def test_time_format_is_hhmm(self):
-        """시간 형식이 HH:MM"""
+    def test_falls_back_to_diary_date_when_no_cover_photo(self):
+        """cover_photo가 없으면 diary_date로 fallback"""
         diaries = [
             _make_diary(diary_date=datetime(2025, 3, 1, 9, 5, tzinfo=UTC)),
         ]
@@ -195,13 +205,46 @@ class TestCalculateDiaryTimeStats:
         assert result.distribution[0].time == "09:00"
         assert result.most_active_time == "09:00"
 
+    def test_falls_back_to_diary_date_when_taken_at_is_none(self):
+        """cover_photo는 있지만 taken_at이 None이면 diary_date로 fallback"""
+        diaries = [
+            _make_diary(
+                diary_date=datetime(2025, 3, 1, 9, 0, tzinfo=UTC),
+                cover_photo=_make_photo(taken_at=None),
+            ),
+        ]
+        result = calculate_diary_time_stats(diaries)
+        assert result.most_active_time == "09:00"
+
+    def test_time_slot_bucketed_to_30_min(self):
+        """시간대를 30분 단위로 버킷"""
+        diaries = [
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 10, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 45, tzinfo=UTC))
+            ),
+        ]
+        result = calculate_diary_time_stats(diaries)
+        slots = {s.time for s in result.distribution}
+        assert slots == {"12:00", "12:30"}
+
     def test_most_active_time_is_highest_count_slot(self):
         """most_active_time은 가장 많은 다이어리가 작성된 슬롯"""
         diaries = [
-            _make_diary(diary_date=datetime(2025, 3, 1, 21, 0, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 21, 20, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 21, 5, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 12, 0, tzinfo=UTC)),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 0, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 20, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 5, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 0, tzinfo=UTC))
+            ),
         ]
         result = calculate_diary_time_stats(diaries)
         assert result.most_active_time == "21:00"
@@ -209,12 +252,24 @@ class TestCalculateDiaryTimeStats:
     def test_distribution_sorted_by_count_desc(self):
         """distribution은 횟수 내림차순 정렬"""
         diaries = [
-            _make_diary(diary_date=datetime(2025, 3, 1, 21, 0, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 21, 10, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 21, 20, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 12, 0, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 12, 10, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 9, 0, tzinfo=UTC)),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 0, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 10, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 20, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 0, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 10, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 9, 0, tzinfo=UTC))
+            ),
         ]
         result = calculate_diary_time_stats(diaries)
         counts = [s.count for s in result.distribution]
@@ -223,7 +278,9 @@ class TestCalculateDiaryTimeStats:
     def test_returns_top_5_at_most(self):
         """최대 5개만 반환"""
         diaries = [
-            _make_diary(diary_date=datetime(2025, 3, 1, h, 0, tzinfo=UTC))
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, h, 0, tzinfo=UTC))
+            )
             for h in range(7, 19)
         ]
         result = calculate_diary_time_stats(diaries)
@@ -232,9 +289,15 @@ class TestCalculateDiaryTimeStats:
     def test_same_slot_aggregated(self):
         """같은 30분 슬롯 내 다이어리는 count 합산"""
         diaries = [
-            _make_diary(diary_date=datetime(2025, 3, 1, 18, 0, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 18, 15, tzinfo=UTC)),
-            _make_diary(diary_date=datetime(2025, 3, 1, 18, 29, tzinfo=UTC)),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 18, 0, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 18, 15, tzinfo=UTC))
+            ),
+            _make_diary(
+                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 18, 29, tzinfo=UTC))
+            ),
         ]
         result = calculate_diary_time_stats(diaries)
         assert len(result.distribution) == 1
