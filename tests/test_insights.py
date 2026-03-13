@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.core.security import create_access_token
 from app.models.diary import Diary
 from app.models.user import User
 from app.services.insights import MIN_DIARY_THRESHOLD
+from app.services.jwt import create_access_token
 from tests.fixtures.auth_fixtures import create_test_user_data
 from tests.fixtures.insights_fixtures import (
     create_current_month_diaries,

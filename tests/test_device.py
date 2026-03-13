@@ -1,155 +1,16 @@
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import select
 
-from app.core.security import create_access_token
+from app.crud.device import upsert_device
 from app.models.device import Device
 from app.models.user import User
+from app.services.jwt import create_access_token
 from tests.fixtures.auth_fixtures import (
     create_login_request_payload,
     create_test_user_data,
 )
-
-# ======================
-# Device Service 테스트 (upsert 로직)
-# ======================
-
-
-@pytest.mark.asyncio
-async def test_upsert_device_creates_new_device(test_db_session):
-    """
-    신규 Device 생성 테스트:
-    - device_id가 DB에 없을 때
-    - 새 Device 레코드 생성
-    """
-    from app.services.device import upsert_device
-
-    # Given: 사용자 생성
-    user_data = create_test_user_data()
-    user = User(**user_data)
-    test_db_session.add(user)
-    await test_db_session.commit()
-
-    # When: upsert_device 호출
-    device = await upsert_device(
-        test_db_session,
-        user_id=user.id,
-        device_id="device-abc-123",
-        device_token="fcm-token-xyz",
-        app_version="1.0.0",
-        os_version="18.2",
-        is_active=True,
-    )
-
-    # Then: Device 생성 확인
-    assert device.id is not None
-    assert device.device_id == "device-abc-123"
-    assert device.user_id == user.id
-    assert device.device_token == "fcm-token-xyz"
-    assert device.app_version == "1.0.0"
-    assert device.os_version == "18.2"
-    assert device.is_active is True
-
-
-@pytest.mark.asyncio
-async def test_upsert_device_updates_existing_device(test_db_session):
-    """
-    기존 Device 업데이트 테스트:
-    - 동일한 device_id로 다시 호출
-    - user_id, token 등 업데이트
-    - 새 레코드 생성되지 않음
-    """
-    from app.services.device import upsert_device
-
-    # Given: 사용자와 Device 생성
-    user_data = create_test_user_data()
-    user = User(**user_data)
-    test_db_session.add(user)
-    await test_db_session.commit()
-
-    device = await upsert_device(
-        test_db_session,
-        user_id=user.id,
-        device_id="device-abc-123",
-        device_token="old-token",
-        app_version="1.0.0",
-        os_version="17.0",
-        is_active=True,
-    )
-    original_id = device.id
-
-    # When: 동일 device_id로 다시 upsert (토큰, 버전 변경)
-    updated_device = await upsert_device(
-        test_db_session,
-        user_id=user.id,
-        device_id="device-abc-123",
-        device_token="new-token",
-        app_version="1.1.0",
-        os_version="18.0",
-        is_active=True,
-    )
-
-    # Then: 기존 레코드 업데이트, 새 레코드 생성되지 않음
-    assert updated_device.id == original_id
-    assert updated_device.device_token == "new-token"
-    assert updated_device.app_version == "1.1.0"
-    assert updated_device.os_version == "18.0"
-
-    result = await test_db_session.execute(select(Device))
-    assert len(result.scalars().all()) == 1
-
-
-@pytest.mark.asyncio
-async def test_upsert_device_changes_user(test_db_session):
-    """
-    Device 소유자 변경 테스트:
-    - 동일 device_id에 다른 user_id로 upsert
-    - user_id가 새 사용자로 업데이트
-    """
-    from app.services.device import upsert_device
-
-    # Given: 두 사용자 생성
-    user1_data = create_test_user_data(
-        email="user1@test.com",
-        provider_user_id="user_1",
-    )
-    user2_data = create_test_user_data(
-        email="user2@test.com",
-        provider_user_id="user_2",
-    )
-    user1 = User(**user1_data)
-    user2 = User(**user2_data)
-    test_db_session.add_all([user1, user2])
-    await test_db_session.commit()
-
-    # user1으로 Device 등록
-    await upsert_device(
-        test_db_session,
-        user_id=user1.id,
-        device_id="shared-device",
-        device_token="token-v1",
-        app_version="1.0.0",
-        os_version="18.0",
-        is_active=True,
-    )
-
-    # When: 같은 기기에서 user2로 로그인 (소유자 변경)
-    device = await upsert_device(
-        test_db_session,
-        user_id=user2.id,
-        device_id="shared-device",
-        device_token="token-v2",
-        app_version="1.0.0",
-        os_version="18.0",
-        is_active=True,
-    )
-
-    # Then: user_id가 user2로 변경
-    assert device.user_id == user2.id
-    assert device.device_token == "token-v2"
-
-    result = await test_db_session.execute(select(Device))
-    assert len(result.scalars().all()) == 1
-
 
 # ======================
 # Device Router 테스트 (POST /members/me/device)
@@ -355,3 +216,260 @@ async def test_dev_login_creates_device(
     assert device.app_version == "0.1.0"
     assert device.os_version == "17.5"
     assert device.is_active is False
+
+
+# ======================
+# upsert_device_native 서비스 테스트 (PostgreSQL native upsert)
+# ======================
+
+
+@pytest.mark.asyncio
+async def test_upsert_device_native_creates_new_device(test_db_session, test_user):
+    """
+    신규 Device 생성:
+    - device_id가 DB에 없을 때 새 레코드 삽입
+    - 반환된 Device의 모든 필드 검증
+    """
+    # When
+    device = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="native-device-001",
+            device_token="fcm-token-001",
+            app_version="1.0.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+
+    # Then
+    assert device.id is not None
+    assert device.device_id == "native-device-001"
+    assert device.user_id == test_user.id
+    assert device.device_token == "fcm-token-001"
+    assert device.app_version == "1.0.0"
+    assert device.os_version == "18.0"
+    assert device.is_active is True
+    assert device.deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_upsert_device_native_updates_existing_device(test_db_session, test_user):
+    """
+    기존 Device 업데이트:
+    - 동일 device_id로 재호출 시 같은 레코드 ID 유지
+    - token, version 등 업데이트 확인
+    - DB에 레코드가 1개만 존재
+    """
+    # Given
+    first = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="native-device-002",
+            device_token="old-token",
+            app_version="1.0.0",
+            os_version="17.0",
+            is_active=True,
+        ),
+    )
+    original_id = first.id
+
+    # When
+    updated = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="native-device-002",
+            device_token="new-token",
+            app_version="1.1.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+
+    # Then: 동일 레코드 업데이트, 새 레코드 미생성
+    assert updated.id == original_id
+    assert updated.device_token == "new-token"
+    assert updated.app_version == "1.1.0"
+    assert updated.os_version == "18.0"
+
+    result = await test_db_session.execute(
+        select(Device).where(Device.device_id == "native-device-002")
+    )
+    assert len(result.scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_upsert_device_native_changes_device_owner(test_db_session):
+    """
+    소유자 변경:
+    - 동일 device_id에 다른 user_id로 upsert
+    - user_id가 새 사용자로 업데이트, DB에 1개만 존재
+    """
+    # Given: 두 사용자 생성
+    user1 = User(
+        **create_test_user_data(email="native1@test.com", provider_user_id="native_1")
+    )
+    user2 = User(
+        **create_test_user_data(email="native2@test.com", provider_user_id="native_2")
+    )
+    test_db_session.add_all([user1, user2])
+    await test_db_session.commit()
+
+    await upsert_device(
+        test_db_session,
+        Device(
+            user_id=user1.id,
+            device_id="shared-native-device",
+            device_token="token-v1",
+            app_version="1.0.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+
+    # When: user2로 동일 기기 upsert
+    device = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=user2.id,
+            device_id="shared-native-device",
+            device_token="token-v2",
+            app_version="1.0.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+
+    # Then: user_id가 user2로 변경, 레코드 1개만
+    assert device.user_id == user2.id
+    assert device.device_token == "token-v2"
+
+    result = await test_db_session.execute(select(Device))
+    assert len(result.scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_upsert_device_native_inserts_when_soft_deleted(
+    test_db_session, test_user
+):
+    """
+    소프트 삭제 레코드가 있을 때 신규 삽입:
+    - partial index (WHERE deleted_at IS NULL) 조건에 해당하지 않아 conflict 미발생
+    - 삭제된 레코드와 별개로 새 레코드 생성
+    """
+    # Given: 소프트 삭제된 Device 존재
+    deleted_device = Device(
+        device_id="deleted-native-device",
+        user_id=test_user.id,
+        device_token="old-token",
+        app_version="1.0.0",
+        os_version="17.0",
+        is_active=False,
+        deleted_at=datetime.now(UTC),
+    )
+    test_db_session.add(deleted_device)
+    await test_db_session.commit()
+
+    # When: 동일 device_id로 upsert
+    new_device = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="deleted-native-device",
+            device_token="new-token",
+            app_version="2.0.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+
+    # Then: 소프트 삭제 레코드와 별개로 새 레코드 생성 (총 2개)
+    assert new_device.id != deleted_device.id
+    assert new_device.deleted_at is None
+    assert new_device.device_token == "new-token"
+
+    result = await test_db_session.execute(
+        select(Device).where(Device.device_id == "deleted-native-device")
+    )
+    assert len(result.scalars().all()) == 2
+
+
+@pytest.mark.asyncio
+async def test_upsert_device_native_handles_none_token(test_db_session, test_user):
+    """
+    device_token None 처리:
+    - None으로 생성 후 값으로 업데이트 가능
+    """
+    # When: token 없이 생성
+    device = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="no-token-native-device",
+            device_token=None,
+            app_version="1.0.0",
+            os_version="18.0",
+            is_active=False,
+        ),
+    )
+
+    # Then
+    assert device.device_token is None
+    assert device.is_active is False
+
+    # When: token 추가하여 업데이트
+    updated = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="no-token-native-device",
+            device_token="now-has-token",
+            app_version="1.0.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+
+    # Then
+    assert updated.device_token == "now-has-token"
+    assert updated.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_upsert_device_native_updated_at_refreshed(test_db_session, test_user):
+    """
+    conflict 발생 시 updated_at 갱신:
+    - ON CONFLICT DO UPDATE SET updated_at = func.now() 동작 확인
+    """
+    # Given
+    first = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="timestamp-native-device",
+            device_token="token",
+            app_version="1.0.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+    original_updated_at = first.updated_at
+
+    # When: 재호출 (conflict → DO UPDATE)
+    updated = await upsert_device(
+        test_db_session,
+        Device(
+            user_id=test_user.id,
+            device_id="timestamp-native-device",
+            device_token="new-token",
+            app_version="1.0.0",
+            os_version="18.0",
+            is_active=True,
+        ),
+    )
+
+    # Then: updated_at이 갱신됨 (별개 트랜잭션이므로 >=)
+    assert updated.updated_at >= original_updated_at

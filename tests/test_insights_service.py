@@ -190,7 +190,9 @@ class TestCalculateDiaryTimeStats:
         diaries = [
             _make_diary(
                 diary_date=datetime(2025, 3, 1, 9, 0, tzinfo=UTC),
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 19, 30, tzinfo=UTC)),
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 19, 30, tzinfo=UTC)
+                ),
             ),
         ]
         result = calculate_diary_time_stats(diaries)
@@ -220,10 +222,14 @@ class TestCalculateDiaryTimeStats:
         """시간대를 30분 단위로 버킷"""
         diaries = [
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 10, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 12, 10, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 45, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 12, 45, tzinfo=UTC)
+                )
             ),
         ]
         result = calculate_diary_time_stats(diaries)
@@ -234,16 +240,24 @@ class TestCalculateDiaryTimeStats:
         """most_active_time은 가장 많은 다이어리가 작성된 슬롯"""
         diaries = [
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 0, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 21, 0, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 20, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 21, 20, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 5, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 21, 5, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 0, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 12, 0, tzinfo=UTC)
+                )
             ),
         ]
         result = calculate_diary_time_stats(diaries)
@@ -253,19 +267,29 @@ class TestCalculateDiaryTimeStats:
         """distribution은 횟수 내림차순 정렬"""
         diaries = [
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 0, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 21, 0, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 10, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 21, 10, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 21, 20, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 21, 20, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 0, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 12, 0, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 12, 10, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 12, 10, tzinfo=UTC)
+                )
             ),
             _make_diary(
                 cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 9, 0, tzinfo=UTC))
@@ -290,13 +314,19 @@ class TestCalculateDiaryTimeStats:
         """같은 30분 슬롯 내 다이어리는 count 합산"""
         diaries = [
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 18, 0, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 18, 0, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 18, 15, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 18, 15, tzinfo=UTC)
+                )
             ),
             _make_diary(
-                cover_photo=_make_photo(taken_at=datetime(2025, 3, 1, 18, 29, tzinfo=UTC))
+                cover_photo=_make_photo(
+                    taken_at=datetime(2025, 3, 1, 18, 29, tzinfo=UTC)
+                )
             ),
         ]
         result = calculate_diary_time_stats(diaries)
