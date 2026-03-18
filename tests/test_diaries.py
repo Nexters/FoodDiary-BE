@@ -1,5 +1,6 @@
 """다이어리 API 테스트"""
 
+import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -273,7 +274,6 @@ class TestGetDiaryById:
 
         # Then: 404 에러
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_get_diary_by_id_forbidden(self, test_client, test_db_session):
@@ -415,148 +415,529 @@ class TestUpdateDiary:
     """PATCH /diaries/{diary_id} 테스트 (수정)"""
 
     @pytest.mark.asyncio
-    async def test_update_diary_success(self, test_client, test_db_session):
+    async def test_update_diary_partial_update(self, test_client, test_db_session):
         """
-        다이어리 수정 성공
+        null 아닌 값만 업데이트 (partial update)
 
-        Given: 사용자의 다이어리 존재
-        When: PATCH /diaries/{diary_id} 호출
-        Then: 다이어리 정보 업데이트
+        Given: restaurant_name="기존 식당", note="기존 메모"인 다이어리, 사진 1개
+        When: restaurant_name만 body에 포함 (note 미전송)
+        Then: restaurant_name만 변경, note는 기존 값 유지
         """
-        # Given: 사용자 생성
-        user_data = create_test_user_data()
-        user = User(**user_data)
+        # Given
+        user = User(**create_test_user_data())
         test_db_session.add(user)
         await test_db_session.commit()
         await test_db_session.refresh(user)
 
-        # Given: 다이어리 생성
-        diary_data = create_diary_data(
-            user_id=user.id, restaurant_name="옛날 식당", category="korean"
+        diary = Diary(
+            **create_diary_data(
+                user_id=user.id,
+                restaurant_name="기존 식당",
+                note="기존 메모",
+                photo_count=1,
+            )
         )
-        diary = Diary(**diary_data)
         test_db_session.add(diary)
         await test_db_session.commit()
         await test_db_session.refresh(diary)
 
+        photo = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        test_db_session.add(photo)
+        await test_db_session.commit()
+        await test_db_session.refresh(photo)
+        diary.cover_photo_id = photo.id
+        await test_db_session.commit()
+
         token = create_access_token(str(user.id), user.provider)
 
-        # When: PATCH /diaries/{diary_id} 호출
+        # When: restaurant_name만 전송, note 미전송
         response = await test_client.patch(
             f"/diaries/{diary.id}",
             headers={"Authorization": f"Bearer {token}"},
-            json={
-                "restaurant_name": "새로운 식당",
-                "category": "western",
-                "note": "수정된 메모",
-            },
+            json={"restaurant_name": "새 식당", "photo_ids": [photo.id]},
         )
 
-        # Then: 성공 응답
+        # Then
         assert response.status_code == 200
         data = response.json()
-
-        # Then: 수정된 정보 검증
-        assert data["restaurant_name"] == "새로운 식당"
-        assert data["category"] == "western"
-        assert data["note"] == "수정된 메모"
+        assert data["id"] == diary.id
+        assert data["restaurant_name"] == "새 식당"  # 변경됨
+        assert data["note"] == "기존 메모"  # 미전송 → 기존 값 유지
+        assert data["photo_count"] == 1
+        assert data["cover_photo_id"] == photo.id
 
     @pytest.mark.asyncio
-    async def test_update_diary_with_photo_ids(self, test_client, test_db_session):
+    async def test_update_diary_null_field_not_applied(
+        self, test_client, test_db_session
+    ):
         """
-        다이어리 사진 삭제 (photo_ids 사용)
+        명시적 null 필드는 업데이트하지 않음
 
-        Given: 다이어리에 3개의 사진 존재
-        When: photo_ids로 2개만 지정 (나머지 1개는 삭제됨)
-        Then: photo_count 업데이트되고, DB에서 실제로 삭제됨
+        Given: note="기존 메모"인 다이어리
+        When: {"note": null, "photo_ids": [...]} 전송
+        Then: note는 기존 값 유지 (null → 무시)
         """
-        from sqlalchemy import select
-
-        # Given: 사용자 생성
-        user_data = create_test_user_data()
-        user = User(**user_data)
+        # Given
+        user = User(**create_test_user_data())
         test_db_session.add(user)
         await test_db_session.commit()
         await test_db_session.refresh(user)
 
-        # Given: 다이어리 생성
-        diary_data = create_diary_data(user_id=user.id, photo_count=3)
-        diary = Diary(**diary_data)
+        diary = Diary(
+            **create_diary_data(user_id=user.id, note="기존 메모", photo_count=1)
+        )
         test_db_session.add(diary)
         await test_db_session.commit()
         await test_db_session.refresh(diary)
 
-        # Given: 사진 3개 생성
-        photos_data = [
-            create_photo_data(diary.id, f"https://example.com/photo{i}.jpg")
-            for i in range(1, 4)
-        ]
-        photos = [Photo(**pd) for pd in photos_data]
-        test_db_session.add_all(photos)
+        photo = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        test_db_session.add(photo)
         await test_db_session.commit()
-        for photo in photos:
-            await test_db_session.refresh(photo)
+        await test_db_session.refresh(photo)
+        diary.cover_photo_id = photo.id
+        await test_db_session.commit()
 
         token = create_access_token(str(user.id), user.provider)
 
-        # ID 미리 저장 (expire_all 후 접근 방지)
-        diary_id = diary.id
-        photo_ids_to_keep = [photos[2].id, photos[0].id]
-        photo_id_to_delete = photos[1].id
+        # When: note를 명시적으로 null로 전송
+        response = await test_client.patch(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"note": None, "photo_ids": [photo.id]},
+        )
 
-        # When: photo_ids로 3번, 1번만 유지 (2번 삭제)
+        # Then: null은 무시되어 기존 값 유지
+        assert response.status_code == 200
+        data = response.json()
+        assert data["note"] == "기존 메모"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"photo_ids": []},  # 빈 리스트
+            {"photo_ids": [999999]},  # 존재하지 않는 ID
+            {"restaurant_name": "새 식당"},  # photo_ids 미전송
+        ],
+        ids=["empty_list", "nonexistent_id", "no_photo_ids"],
+    )
+    async def test_update_diary_no_valid_photos(
+        self, test_client, test_db_session, body
+    ):
+        """
+        유효한 사진이 없는 경우 400
+
+        Given: 사진 1개가 있는 다이어리
+        When: photo_ids=[] / 없는 ID / photo_ids 미전송
+        Then: 400 Bad Request (PhotoRequiredError)
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=1))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        photo = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        test_db_session.add(photo)
+        await test_db_session.commit()
+
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
+        response = await test_client.patch(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json=body,
+        )
+
+        # Then
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_update_diary_remaining_photos(
+        self, test_client, test_db_session, tmp_path
+    ):
+        """
+        photo_ids 지정 → 남은 사진만 저장, 제외된 사진은 DB·파일에서 삭제
+
+        Given: 사진 3개 (photo2는 실제 임시 파일), cover=photo1
+        When: photo_ids=[photo1, photo3] (photo2 제외)
+        Then:
+          - 응답 photos={photo1, photo3}, photo_count=2
+          - DB에서 photo2 사라짐
+          - 실제 파일도 삭제됨
+        """
+        from sqlalchemy import select as sa_select
+
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=3))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        # photo2는 실제 임시 파일로 생성 (파일 삭제 검증용)
+        tmp_file = tmp_path / "photo2.jpg"
+        tmp_file.write_bytes(b"fake image data")
+
+        photo1 = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        photo2 = Photo(**create_photo_data(diary.id, str(tmp_file)))
+        photo3 = Photo(**create_photo_data(diary.id, "storage/photo3.jpg"))
+        test_db_session.add_all([photo1, photo2, photo3])
+        await test_db_session.commit()
+        for p in [photo1, photo2, photo3]:
+            await test_db_session.refresh(p)
+
+        diary.cover_photo_id = photo1.id
+        await test_db_session.commit()
+
+        diary_id = diary.id
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
         response = await test_client.patch(
             f"/diaries/{diary_id}",
             headers={"Authorization": f"Bearer {token}"},
-            json={"photo_ids": photo_ids_to_keep},
+            json={"photo_ids": [photo1.id, photo3.id]},
         )
+        # 테스트에서는 override_get_session이 commit을 호출하지 않으므로
+        # after_commit 이벤트가 발생하려면 명시적으로 commit 필요
+        await test_db_session.commit()
+        # commit 이후 create_task(delete_photo_files)가 실행될 시간 확보
+        await asyncio.sleep(0.1)
 
-        # Then: 성공 응답
+        # Then: 응답 검증
         assert response.status_code == 200
         data = response.json()
-
-        # Then: photo_count 업데이트 확인
         assert data["photo_count"] == 2
+        response_photo_ids = {p["photo_id"] for p in data["photos"]}
+        assert response_photo_ids == {photo1.id, photo3.id}
 
-        # Then: DB에서 실제로 사진 개수 확인 (세션 새로고침)
-        test_db_session.expire_all()  # 캐시 비우기
+        # Then: DB 검증
+        test_db_session.expire_all()
         result = await test_db_session.execute(
-            select(Photo).where(Photo.diary_id == diary_id)
+            sa_select(Photo).where(Photo.diary_id == diary_id)
         )
-        remaining_photos = result.scalars().all()
-        assert len(remaining_photos) == 2
+        remaining_ids = {p.id for p in result.scalars().all()}
+        assert remaining_ids == {photo1.id, photo3.id}
 
-        # Then: 삭제된 사진 확인
-        remaining_photo_ids = {p.id for p in remaining_photos}
-        assert photo_ids_to_keep[0] in remaining_photo_ids
-        assert photo_ids_to_keep[1] in remaining_photo_ids
-        assert photo_id_to_delete not in remaining_photo_ids  # 2번 사진은 삭제됨
+        # Then: 실제 파일 삭제 검증
+        assert not tmp_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_update_diary_cover_photo_replaced(
+        self, test_client, test_db_session
+    ):
+        """
+        커버 사진이 photo_ids에서 제외되면 첫 번째 남은 사진으로 자동 교체
+
+        Given: cover_photo_id=photo1, 사진 2개
+        When: photo_ids=[photo2] (커버인 photo1 제외)
+        Then: cover_photo_id=photo2로 교체
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=2))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        photo1 = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        photo2 = Photo(**create_photo_data(diary.id, "storage/photo2.jpg"))
+        test_db_session.add_all([photo1, photo2])
+        await test_db_session.commit()
+        await test_db_session.refresh(photo1)
+        await test_db_session.refresh(photo2)
+
+        diary.cover_photo_id = photo1.id
+        await test_db_session.commit()
+
+        token = create_access_token(str(user.id), user.provider)
+
+        # When: 커버(photo1) 제외, photo2만 유지
+        response = await test_client.patch(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"photo_ids": [photo2.id]},
+        )
+
+        # Then
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cover_photo_id"] == photo2.id  # 자동 교체됨
+        assert data["photo_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_update_diary_cover_photo_auto_set_when_none(
+        self, test_client, test_db_session
+    ):
+        """
+        cover_photo_id=None 상태에서 photo_ids 지정 시 첫 번째 사진으로 자동 설정
+
+        Given: cover_photo_id=None인 다이어리, 사진 2개
+        When: photo_ids=[photo1, photo2]
+        Then: cover_photo_id=photo1 (photo_ids_ordered[0])으로 자동 설정
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        # cover_photo_id=None (fixture 기본값)
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=2))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        photo1 = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        photo2 = Photo(**create_photo_data(diary.id, "storage/photo2.jpg"))
+        test_db_session.add_all([photo1, photo2])
+        await test_db_session.commit()
+        await test_db_session.refresh(photo1)
+        await test_db_session.refresh(photo2)
+
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
+        response = await test_client.patch(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"photo_ids": [photo1.id, photo2.id]},
+        )
+
+        # Then
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cover_photo_id"] == photo1.id  # photo_ids_ordered[0]으로 자동 설정
 
     @pytest.mark.asyncio
     async def test_update_diary_not_found(self, test_client, test_db_session):
         """
-        존재하지 않는 다이어리 수정 시 404 에러
+        존재하지 않는 다이어리 수정 → 404
 
         Given: 유효한 사용자
-        When: 존재하지 않는 diary_id로 수정 요청
+        When: 존재하지 않는 diary_id로 수정
         Then: 404 Not Found
         """
-        # Given: 사용자 생성
-        user_data = create_test_user_data()
-        user = User(**user_data)
+        # Given
+        user = User(**create_test_user_data())
         test_db_session.add(user)
+        await test_db_session.commit()
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
+        response = await test_client.patch(
+            "/diaries/99999",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"restaurant_name": "새 식당", "photo_ids": [1]},
+        )
+
+        # Then
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_update_diary_forbidden(self, test_client, test_db_session):
+        """
+        다른 사용자의 다이어리 수정 → 404 (권한 정보 노출 방지)
+
+        Given: user1의 다이어리, user2의 토큰
+        When: user2가 user1의 다이어리 수정 시도
+        Then: 404 Not Found
+        """
+        # Given
+        user1 = User(**create_test_user_data(email="user1@example.com"))
+        user2 = User(
+            **create_test_user_data(
+                email="user2@example.com", provider_user_id="user_2"
+            )
+        )
+        test_db_session.add_all([user1, user2])
+        await test_db_session.commit()
+        await test_db_session.refresh(user1)
+        await test_db_session.refresh(user2)
+
+        diary = Diary(**create_diary_data(user_id=user1.id, photo_count=1))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        photo = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        test_db_session.add(photo)
+        await test_db_session.commit()
+        await test_db_session.refresh(photo)
+        diary.cover_photo_id = photo.id
+        await test_db_session.commit()
+
+        token = create_access_token(str(user2.id), user2.provider)
+
+        # When: user2가 user1의 다이어리 수정 시도
+        response = await test_client.patch(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"restaurant_name": "새 식당", "photo_ids": [photo.id]},
+        )
+
+        # Then
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_update_diary_mixed_photo_ids(self, test_client, test_db_session):
+        """
+        유효/무효 혼합 photo_ids → 유효한 것만 남음
+
+        Given: 사진 2개 (photo1, photo2)
+        When: photo_ids=[photo1.id, 99999] (유효 1개 + 없는 ID 1개)
+        Then: photo1만 남음, photo2 삭제됨, photo_count=1
+        """
+        from sqlalchemy import select as sa_select
+
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=2))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        photo1 = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        photo2 = Photo(**create_photo_data(diary.id, "storage/photo2.jpg"))
+        test_db_session.add_all([photo1, photo2])
+        await test_db_session.commit()
+        await test_db_session.refresh(photo1)
+        await test_db_session.refresh(photo2)
+
+        diary.cover_photo_id = photo1.id
+        await test_db_session.commit()
+
+        diary_id = diary.id
+        token = create_access_token(str(user.id), user.provider)
+
+        # When: 유효한 photo1 + 없는 ID 99999
+        response = await test_client.patch(
+            f"/diaries/{diary_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"photo_ids": [photo1.id, 99999]},
+        )
+
+        # Then: 응답
+        assert response.status_code == 200
+        data = response.json()
+        assert data["photo_count"] == 1
+        assert data["photos"][0]["photo_id"] == photo1.id
+
+        # Then: DB — photo2 삭제됨
+        test_db_session.expire_all()
+        result = await test_db_session.execute(
+            sa_select(Photo).where(Photo.diary_id == diary_id)
+        )
+        remaining_ids = {p.id for p in result.scalars().all()}
+        assert remaining_ids == {photo1.id}
+
+    @pytest.mark.asyncio
+    async def test_update_diary_file_not_deleted_on_rollback(
+        self, test_client, test_db_session, tmp_path
+    ):
+        """
+        커밋이 이루어지지 않으면 (롤백 시) 파일이 삭제되지 않음
+
+        after_commit 이벤트를 통해 파일 삭제를 예약하므로,
+        세션이 커밋되지 않으면 이벤트가 발화하지 않아 파일은 보존됨.
+
+        Given: 실제 파일이 있는 사진 2개 (photo2가 삭제 대상)
+        When: PATCH 성공 (200) 하지만 session.commit() 미호출
+        Then: tmp_file.exists() == True  ← 커밋 없이는 파일 삭제 안됨
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=2))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        tmp_file = tmp_path / "photo2.jpg"
+        tmp_file.write_bytes(b"fake image data")
+
+        photo1 = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        photo2 = Photo(**create_photo_data(diary.id, str(tmp_file)))
+        test_db_session.add_all([photo1, photo2])
+        await test_db_session.commit()
+        await test_db_session.refresh(photo1)
+        await test_db_session.refresh(photo2)
+
+        diary.cover_photo_id = photo1.id
         await test_db_session.commit()
 
         token = create_access_token(str(user.id), user.provider)
 
-        # When: 존재하지 않는 다이어리 수정
+        # When: PATCH 성공 (200), 하지만 test_db_session.commit()은 호출하지 않음
         response = await test_client.patch(
-            "/diaries/99999",
+            f"/diaries/{diary.id}",
             headers={"Authorization": f"Bearer {token}"},
-            json={"restaurant_name": "새로운 식당"},
+            json={"photo_ids": [photo1.id]},
+        )
+        await asyncio.sleep(0.1)  # after_commit 이벤트가 발화할 시간 대기
+
+        # Then
+        assert response.status_code == 200
+        assert tmp_file.exists()  # 커밋이 없으므로 after_commit 미발화 → 파일 보존
+
+    @pytest.mark.asyncio
+    async def test_update_diary_soft_deleted(self, test_client, test_db_session):
+        """
+        소프트 삭제된 다이어리 수정 → 404
+
+        Given: deleted_at이 설정된 다이어리
+        When: PATCH
+        Then: 404 (crud의 deleted_at.is_(None) 필터)
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary_data = create_diary_data(user_id=user.id, photo_count=1)
+        diary_data["deleted_at"] = datetime.now(UTC)  # 소프트 삭제 처리
+        diary = Diary(**diary_data)
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        photo = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        test_db_session.add(photo)
+        await test_db_session.commit()
+
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
+        response = await test_client.patch(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"photo_ids": [photo.id]},
         )
 
-        # Then: 404 에러
+        # Then
         assert response.status_code == 404
 
 

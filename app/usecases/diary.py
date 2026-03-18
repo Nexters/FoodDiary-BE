@@ -32,7 +32,9 @@ async def update_diary(
 
     # 클라이언트가 실제로 보낸 필드만 추출 (미전송 필드는 제외, photo_ids는 별도 처리)
     # 예: {"note": "맛있다"} 만 보내면 note만 덮어씀
-    update_data = body.model_dump(exclude_unset=True, exclude={"photo_ids"})
+    update_data = body.model_dump(
+        exclude_unset=True, exclude_none=True, exclude={"photo_ids"}
+    )
     for field, value in update_data.items():
         setattr(diary, field, value)
 

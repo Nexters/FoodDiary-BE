@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_session
+from app.core.database import get_session, get_session_v2
 from app.core.dependencies import get_current_user_id
 from app.models.diary import Diary
 from app.schemas.diary import (
