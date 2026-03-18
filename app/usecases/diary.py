@@ -1,15 +1,22 @@
 import asyncio
 from uuid import UUID
 
+from fastapi import UploadFile
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.crud import diary as crud_diary
+from app.crud import photo as crud_photo
 from app.models import Diary, Photo
 from app.schemas.diary import DiaryUpdate, DiaryWithPhotos, PhotoInDiary
 from app.services import photo_service
-from app.services.diary_service import _build_tags, _merge_date_with_cover_taken_at
+from app.services.diary_service import (
+    MAX_PHOTOS_PER_DIARY,
+    _build_tags,
+    _merge_date_with_cover_taken_at,
+)
+from app.utils.file_storage import save_user_photo
 
 
 class DiaryNotFoundError(Exception):
@@ -17,6 +24,10 @@ class DiaryNotFoundError(Exception):
 
 
 class PhotoRequiredError(Exception):
+    pass
+
+
+class PhotoLimitExceededError(Exception):
     pass
 
 
@@ -99,3 +110,32 @@ def _build_diary_with_photos(diary: Diary, photos: list[Photo]) -> DiaryWithPhot
             for p in photos
         ],
     )
+
+
+async def add_diary_photos(
+    session: AsyncSession,
+    user_id: UUID,
+    diary_id: int,
+    files: list[UploadFile],
+) -> list[int]:
+    diary = await crud_diary.get_diary(session, diary_id)
+    if diary is None or diary.user_id != user_id:
+        raise DiaryNotFoundError
+
+    total_photo_count = diary.photo_count + len(files)
+    if total_photo_count > MAX_PHOTOS_PER_DIARY:
+        raise PhotoLimitExceededError(
+            f"다이어리당 최대 {MAX_PHOTOS_PER_DIARY}개의 사진만 업로드할 수 있습니다. "
+            f"현재: {diary.photo_count}개, 추가 시도: {len(files)}개"
+        )
+
+    # 스토리지에 이미지 파일 저장
+    image_urls = await asyncio.gather(
+        *[save_user_photo(user_id, file) for file in files]
+    )
+    # 데이터베이스에 이미지 정보 저장
+    photos = await crud_photo.create_photos(
+        session, [Photo(diary_id=diary_id, image_url=url) for url in image_urls]
+    )
+    diary.photo_count += len(photos)
+    return [photo.id for photo in photos]

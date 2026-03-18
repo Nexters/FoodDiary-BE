@@ -26,7 +26,11 @@ from app.schemas.restaurant import RestaurantListResponse
 from app.services import diary_service, llm_service, restaurant_service
 from app.services.diary_service import _build_tags, _merge_date_with_cover_taken_at
 from app.usecases import diary as diary_usecase
-from app.usecases.diary import DiaryNotFoundError, PhotoRequiredError
+from app.usecases.diary import (
+    DiaryNotFoundError,
+    PhotoLimitExceededError,
+    PhotoRequiredError,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -338,7 +342,7 @@ async def update_diary(
 async def add_diary_photos(
     diary_id: int,
     photos: Annotated[list[UploadFile], File(description="추가할 이미지 파일들")],
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_session_v2),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -362,20 +366,19 @@ async def add_diary_photos(
                 detail="Only image files are allowed.",
             )
     try:
-        photo_ids = await diary_service.add_photos_to_diary(
-            db=db, user_id=user_id, diary_id=diary_id, files=photos
+        photo_ids = await diary_usecase.add_diary_photos(
+            session=db, user_id=user_id, diary_id=diary_id, files=photos
         )
-    except ValueError as e:
+    except DiaryNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=DIARY_NOT_FOUND,
+        ) from e
+    except PhotoLimitExceededError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
-
-    if photo_ids is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
-        )
     return AddDiaryPhotosResponse(photo_ids=photo_ids)
 
 

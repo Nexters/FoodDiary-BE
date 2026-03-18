@@ -3,15 +3,13 @@
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
-from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.models import Diary, Photo
+from app.models import Diary
 from app.schemas.diary import DiaryWithPhotos, PhotoInDiary
-from app.utils.file_storage import save_user_photo
 
 # 다이어리당 최대 사진 개수
 MAX_PHOTOS_PER_DIARY = 10
@@ -175,63 +173,6 @@ async def get_diary_by_id(
         updated_at=diary.updated_at,
         photos=photos,
     )
-
-
-async def add_photos_to_diary(
-    db: AsyncSession,
-    user_id: UUID,
-    diary_id: int,
-    files: list[UploadFile],
-) -> list[int] | None:
-    """
-    기존 다이어리에 사진을 추가합니다.
-    소유자 검증 후 파일 저장 + Photo 생성, diary.photo_count 증가.
-    없거나 권한 없으면 None 반환.
-    사진은 최대 10개까지 추가 가능.
-
-    Raises:
-        ValueError: 사진 개수가 10개를 초과하는 경우
-    """
-    # SELECT ... FOR UPDATE로 락 획득하여 동시성 제어
-    stmt = (
-        select(Diary)
-        .where(
-            Diary.id == diary_id,
-            Diary.user_id == user_id,
-            Diary.deleted_at.is_(None),
-        )
-        .with_for_update()
-    )
-    result = await db.execute(stmt)
-    diary = result.scalar_one_or_none()
-    if diary is None:
-        return None
-
-    # 사진 개수 제한 체크
-    current_photo_count = diary.photo_count
-    new_photo_count = len(files)
-    total_photo_count = current_photo_count + new_photo_count
-
-    if total_photo_count > MAX_PHOTOS_PER_DIARY:
-        raise ValueError(
-            f"다이어리당 최대 {MAX_PHOTOS_PER_DIARY}개의 사진만 업로드할 수 있습니다. "
-            f"현재: {current_photo_count}개, 추가 시도: {new_photo_count}개"
-        )
-
-    new_photo_ids: list[int] = []
-    for file in files:
-        image_url = await save_user_photo(user_id, file)
-        photo = Photo(
-            diary_id=diary_id,
-            image_url=image_url,
-        )
-        db.add(photo)
-        await db.flush()
-        new_photo_ids.append(photo.id)
-        diary.photo_count += 1
-
-    await db.commit()
-    return new_photo_ids
 
 
 async def delete_diary(
