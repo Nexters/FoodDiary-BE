@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -29,6 +30,50 @@ class PhotoRequiredError(Exception):
 
 class PhotoLimitExceededError(Exception):
     pass
+
+
+class DateRangeInvalidError(Exception):
+    pass
+
+
+class DateRangeTooLongError(Exception):
+    pass
+
+
+class DateRangeFutureError(Exception):
+    pass
+
+
+async def get_diaries_by_date_range(
+    session: AsyncSession,
+    user_id: UUID,
+    start_date: date,
+    end_date: date,
+) -> list[DiaryWithPhotos]:
+    if start_date > end_date:
+        raise DateRangeInvalidError
+    if (end_date - start_date).days > 42:
+        raise DateRangeTooLongError
+    if end_date > date.today():
+        raise DateRangeFutureError
+    diaries = await crud_diary.get_diaries_by_date_range(
+        session, user_id, start_date, end_date
+    )
+    return [
+        _build_diary_with_photos(d, sorted(d.photos, key=lambda x: x.id))
+        for d in diaries
+    ]
+
+
+async def get_diary(
+    session: AsyncSession,
+    user_id: UUID,
+    diary_id: int,
+) -> DiaryWithPhotos:
+    diary = await crud_diary.get_diary(session, diary_id)
+    if diary is None or diary.user_id != user_id:
+        raise DiaryNotFoundError
+    return _build_diary_with_photos(diary, sorted(diary.photos, key=lambda x: x.id))
 
 
 async def update_diary(

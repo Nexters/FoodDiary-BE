@@ -160,7 +160,7 @@ class TestGetDiaries:
 
         # Then: 400 에러 (라우터에서 strptime 실패 시 400 반환)
         assert response.status_code == 400
-        assert "Invalid date format" in response.json()["detail"]
+        assert "날짜 형식" in response.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_get_diaries_date_range_too_long(self, test_client, test_db_session):
@@ -187,7 +187,7 @@ class TestGetDiaries:
 
         # Then: 400 에러
         assert response.status_code == 400
-        assert "Date range must be within 42 days" in response.json()["detail"]
+        assert "42일" in response.json()["detail"]
 
 
 class TestGetDiaryById:
@@ -1332,7 +1332,7 @@ class TestAddDiaryPhotos:
 
         Given: 유효한 사용자와 다이어리
         When: text/plain 파일 전송
-        Then: 400 "Only image files are allowed."
+        Then: 400 "이미지 파일만 업로드할 수 있습니다."
         """
         # Given
         user = User(**create_test_user_data())
@@ -1356,7 +1356,7 @@ class TestAddDiaryPhotos:
 
         # Then
         assert response.status_code == 400
-        assert "Only image files are allowed" in response.json()["detail"]
+        assert "이미지 파일" in response.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_add_diary_photos_diary_not_found(self, test_client, test_db_session):

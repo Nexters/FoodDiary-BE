@@ -8,10 +8,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_session, get_session_v2
 from app.core.dependencies import get_current_user_id
-from app.models.diary import Diary
+from app.routers.diaries_mock import (
+    DATE_RANGE_RESPONSE_EXAMPLE,
+    get_mock_date_range_response,
+    get_mock_diaries_response,
+    get_mock_diary_detail,
+)
 from app.schemas.diary import (
     AddDiaryPhotosResponse,
     DatePhotosEntry,
@@ -20,13 +24,14 @@ from app.schemas.diary import (
     DiaryUpdate,
     DiaryWithPhotos,
     PhotoEntry,
-    PhotoInDiary,
 )
 from app.schemas.restaurant import RestaurantListResponse
 from app.services import diary_service, llm_service, restaurant_service
-from app.services.diary_service import _build_tags, _merge_date_with_cover_taken_at
 from app.usecases import diary as diary_usecase
 from app.usecases.diary import (
+    DateRangeFutureError,
+    DateRangeInvalidError,
+    DateRangeTooLongError,
     DiaryNotFoundError,
     PhotoLimitExceededError,
     PhotoRequiredError,
@@ -36,34 +41,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
 
 DIARY_NOT_FOUND = "다이어리를 찾을 수 없거나 접근 권한이 없습니다."
-
-
-DATE_RANGE_RESPONSE_EXAMPLE = {
-    "2026-01-15": {
-        "photos": [
-            {
-                "url": "https://example.com/photos/1.jpg",
-                "diary_date": "2026-01-15T12:30:00",
-                "road_address": "서울 중구 명동길 29",
-            },
-            {
-                "url": "https://example.com/photos/2.jpg",
-                "diary_date": "2026-01-15T12:30:00",
-                "road_address": "서울 중구 명동길 29",
-            },
-        ]
-    },
-    "2026-01-16": {"photos": []},
-    "2026-01-17": {
-        "photos": [
-            {
-                "url": "https://example.com/photos/3.jpg",
-                "diary_date": "2026-01-17T19:00:00",
-                "road_address": "서울 강남구 테헤란로 152",
-            }
-        ]
-    },
-}
 
 
 @router.get("", response_model=DiariesByDateResponse)
@@ -99,7 +76,7 @@ async def get_diaries_by_date_range(
             end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
         except ValueError:
             return {"diaries": []}
-        return _get_mock_diaries_response(start, end)
+        return get_mock_diaries_response(start, end)
 
     try:
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -107,28 +84,29 @@ async def get_diaries_by_date_range(
     except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid date format. Use YYYY-MM-DD",
+            detail="날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력하세요.",
         ) from err
 
-    if start_date > end_date:
+    try:
+        diaries = await diary_usecase.get_diaries_by_date_range(
+            db, user_id, start_date, end_date
+        )
+    except DateRangeInvalidError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start_date must be before or equal to end_date",
-        )
-
-    if (end_date - start_date).days > 42:
+            detail="시작 날짜는 종료 날짜보다 이전이거나 같아야 합니다.",
+        ) from e
+    except DateRangeTooLongError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Date range must be within 42 days",
-        )
-
-    diaries = await diary_service.get_diaries_by_date_range(
-        db=db,
-        user_id=user_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
-    return {"diaries": [_build_diary_with_photos(d) for d in diaries]}
+            detail="날짜 범위는 42일 이내여야 합니다.",
+        ) from e
+    except DateRangeFutureError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="종료 날짜는 오늘 이후일 수 없습니다.",
+        ) from e
+    return {"diaries": diaries}
 
 
 @router.get(
@@ -179,10 +157,10 @@ async def get_diaries_summary_by_date_range(
         try:
             start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
             end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-            return _get_mock_date_range_response(start, end)
+            return get_mock_date_range_response(start, end)
         except ValueError:
             pass
-        return _get_mock_date_range_response(date(2026, 2, 14), date(2026, 2, 16))
+        return get_mock_date_range_response(date(2026, 2, 14), date(2026, 2, 16))
 
     try:
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -190,27 +168,28 @@ async def get_diaries_summary_by_date_range(
     except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid date format. Use YYYY-MM-DD",
+            detail="날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력하세요.",
         ) from err
 
-    if start_date > end_date:
+    try:
+        diaries = await diary_usecase.get_diaries_by_date_range(
+            db, user_id, start_date, end_date
+        )
+    except DateRangeInvalidError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start_date must be before or equal to end_date",
-        )
-
-    if (end_date - start_date).days > 42:
+            detail="시작 날짜는 종료 날짜보다 이전이거나 같아야 합니다.",
+        ) from e
+    except DateRangeTooLongError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Date range must be within 42 days",
-        )
-
-    diaries = await diary_service.get_diaries_by_date_range(
-        db=db,
-        user_id=user_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
+            detail="날짜 범위는 42일 이내여야 합니다.",
+        ) from e
+    except DateRangeFutureError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="종료 날짜는 오늘 이후일 수 없습니다.",
+        ) from e
     return _build_date_photos_response(start_date, end_date, diaries)
 
 
@@ -233,17 +212,15 @@ async def get_diary_by_id(
     """
     # test_mode일 경우 mock 데이터 반환
     if test_mode:
-        return _get_mock_diary_detail(diary_id)
+        return get_mock_diary_detail(diary_id)
 
-    diary = await diary_service.get_diary_by_id(
-        db=db, user_id=user_id, diary_id=diary_id
-    )
-    if diary is None:
+    try:
+        return await diary_usecase.get_diary(db, user_id, diary_id)
+    except DiaryNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
-        )
-    return diary
+            detail=DIARY_NOT_FOUND,
+        ) from e
 
 
 @router.get("/{diary_id}/suggestions", response_model=RestaurantListResponse)
@@ -282,7 +259,7 @@ async def get_diary_blog_text(
     if diary is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
+            detail=DIARY_NOT_FOUND,
         )
 
     diary_info = {
@@ -302,7 +279,7 @@ async def get_diary_blog_text(
         logger.exception("블로그 텍스트 생성 실패: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Blog text generation failed. Please try again later.",
+            detail="블로그 텍스트 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
         ) from e
 
     return DiaryBlogTextResponse(blog_text=blog_text)
@@ -325,7 +302,7 @@ async def update_diary(
     except DiaryNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
+            detail=DIARY_NOT_FOUND,
         ) from e
     except PhotoRequiredError as e:
         raise HTTPException(
@@ -357,13 +334,13 @@ async def add_diary_photos(
     if not photos:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No photos provided",
+            detail="사진을 업로드해주세요.",
         )
     for photo in photos:
         if not photo.content_type or not photo.content_type.startswith("image/"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only image files are allowed.",
+                detail="이미지 파일만 업로드할 수 있습니다.",
             )
     try:
         photo_ids = await diary_usecase.add_diary_photos(
@@ -406,39 +383,8 @@ async def delete_diary(
 # ========================================
 
 
-def _build_diary_with_photos(diary: Diary) -> DiaryWithPhotos:
-    status = diary.analysis_status or "done"
-    cover_photo_url = diary.get_cover_photo_url(settings.IMAGE_BASE_URL)
-    photos = [
-        PhotoInDiary(
-            photo_id=p.id,
-            image_url=p.get_full_url(settings.IMAGE_BASE_URL),
-        )
-        for p in sorted(diary.photos, key=lambda x: x.id)
-    ]
-    return DiaryWithPhotos(
-        id=diary.id,
-        user_id=diary.user_id,
-        diary_date=_merge_date_with_cover_taken_at(diary),
-        time_type=diary.time_type,
-        analysis_status=status,
-        restaurant_name=diary.restaurant_name,
-        restaurant_url=diary.restaurant_url,
-        road_address=diary.road_address,
-        category=diary.category,
-        cover_photo_id=diary.cover_photo_id,
-        cover_photo_url=cover_photo_url,
-        note=diary.note,
-        tags=_build_tags(diary),
-        photo_count=diary.photo_count,
-        created_at=diary.created_at,
-        updated_at=diary.updated_at,
-        photos=photos,
-    )
-
-
 def _build_date_photos_response(
-    start_date: date, end_date: date, diaries: list[Diary]
+    start_date: date, end_date: date, diaries: list[DiaryWithPhotos]
 ) -> dict[str, dict]:
     response: dict[str, dict] = {}
     cur = start_date
@@ -450,217 +396,13 @@ def _build_date_photos_response(
         date_key = diary.diary_date.date().isoformat()
         if date_key not in response:
             response[date_key] = {"photos": []}
-        diary_date = _merge_date_with_cover_taken_at(diary)
-        for p in sorted(diary.photos, key=lambda x: x.id):
+        for p in diary.photos:
             response[date_key]["photos"].append(
                 PhotoEntry(
-                    url=p.get_full_url(settings.IMAGE_BASE_URL),
-                    diary_date=diary_date,
+                    url=p.image_url,
+                    diary_date=diary.diary_date,
                     road_address=diary.road_address,
                 )
             )
 
     return response
-
-
-# ========================================
-# Mock 데이터 생성 함수들
-# ========================================
-
-_MOCK_USER_ID = UUID("e435a643-a6c8-49ab-b14f-6dc4ae5af7be")
-
-# (name, map_url, address, category, tags)
-_MOCK_RESTAURANTS = [
-    (
-        "명동교자",
-        "https://place.map.kakao.com/477096726",
-        "서울 중구 명동길 29",
-        "korean",
-        ["칼국수", "만두"],
-    ),
-    (
-        "스시히로바",
-        "https://place.map.kakao.com/12345678",
-        "서울 강남구 테헤란로 152",
-        "japanese",
-        ["사시미", "라멘"],
-    ),
-    (
-        "투썸플레이스",
-        "https://place.map.kakao.com/23456789",
-        "서울 마포구 월드컵북로 396",
-        "etc",
-        ["아메리카노", "크로와상"],
-    ),
-    (
-        "버거킹",
-        "https://place.map.kakao.com/34567890",
-        "서울 종로구 종로 1",
-        "etc",
-        ["와퍼", "감자튀김"],
-    ),
-    (
-        "봉피양",
-        "https://place.map.kakao.com/45678901",
-        "서울 서초구 서초대로 396",
-        "korean",
-        ["평양냉면", "불고기"],
-    ),
-]
-
-_MOCK_TIME_TYPES = ["breakfast", "lunch", "dinner", "snack"]
-
-# bucket(seed % 5) → 사진 수 (0 = 빈 날짜)
-_BUCKET_TO_PHOTO_COUNT = [0, 1, 2, 3, 5]
-
-
-def _mock_photos(seed: int, count: int, base_id: int) -> list[PhotoInDiary]:
-    return [
-        PhotoInDiary(
-            photo_id=base_id + i,
-            image_url=f"https://picsum.photos/seed/{seed}{chr(97 + i)}/400/300",
-        )
-        for i in range(count)
-    ]
-
-
-def _get_mock_diaries_response(start_date: date, end_date: date) -> dict:
-    """GET /diaries test_mode용 mock 응답 - DiariesByDateResponse 구조"""
-    diaries = []
-    current = start_date
-    diary_id = int(current.strftime("%Y%m%d")) % 1000
-
-    while current <= end_date:
-        seed = int(current.strftime("%Y%m%d"))
-        photo_count = _BUCKET_TO_PHOTO_COUNT[seed % 5]
-
-        if photo_count > 0:
-            name, url, address, category, tags = _MOCK_RESTAURANTS[
-                seed % len(_MOCK_RESTAURANTS)
-            ]
-            time_type = _MOCK_TIME_TYPES[seed % len(_MOCK_TIME_TYPES)]
-            photos = _mock_photos(seed, photo_count, diary_id * 10)
-            noon = datetime(current.year, current.month, current.day, 12, 0)
-            diaries.append(
-                DiaryWithPhotos(
-                    id=diary_id,
-                    user_id=_MOCK_USER_ID,
-                    diary_date=current,
-                    time_type=time_type,
-                    analysis_status="done",
-                    restaurant_name=name,
-                    restaurant_url=url,
-                    road_address=address,
-                    category=category,
-                    cover_photo_id=diary_id * 10,
-                    cover_photo_url=f"https://picsum.photos/seed/{seed}a/400/300",
-                    note=None,
-                    tags=tags,
-                    photo_count=photo_count,
-                    created_at=noon,
-                    updated_at=noon,
-                    photos=photos,
-                )
-            )
-
-        diary_id += 1
-        current = date.fromordinal(current.toordinal() + 1)
-
-    return {"diaries": diaries}
-
-
-def _get_mock_date_range_response(start_date: date, end_date: date) -> dict[str, dict]:
-    """GET /diaries/summary test_mode용 mock 응답 - 날짜별 사진 목록 반환"""
-    result = {}
-    current = start_date
-
-    while current <= end_date:
-        seed = int(current.strftime("%Y%m%d"))
-        photo_count = _BUCKET_TO_PHOTO_COUNT[seed % 5]
-        _, _, address, _, _ = _MOCK_RESTAURANTS[seed % len(_MOCK_RESTAURANTS)]
-        noon = datetime(current.year, current.month, current.day, 12, 0)
-        photos = [
-            PhotoEntry(
-                url=f"https://picsum.photos/seed/{seed}{chr(97 + i)}/400/300",
-                diary_date=noon,
-                road_address=address if photo_count > 0 else None,
-            )
-            for i in range(photo_count)
-        ]
-        result[current.isoformat()] = {"photos": photos}
-        current = date.fromordinal(current.toordinal() + 1)
-
-    return result
-
-
-def _get_mock_diary_detail(diary_id: int) -> DiaryWithPhotos:
-    """GET /diaries/{diary_id} test_mode용 mock 응답"""
-    if diary_id == 12:
-        return DiaryWithPhotos(
-            id=12,
-            user_id=_MOCK_USER_ID,
-            diary_date=date(2026, 1, 19),
-            time_type="lunch",
-            analysis_status="done",
-            restaurant_name="명동교자",
-            restaurant_url="https://place.map.kakao.com/477096726",
-            road_address="서울 중구 명동길 29",
-            category="korean",
-            cover_photo_id=101,
-            cover_photo_url="https://picsum.photos/seed/diary12/400/300",
-            note="칼국수 맛집 발견!",
-            tags=["칼국수", "만두"],
-            photo_count=3,
-            created_at=datetime(2026, 1, 19, 12, 40),
-            updated_at=datetime(2026, 1, 19, 12, 45),
-            photos=_mock_photos(20260119, 3, 101),
-        )
-    if diary_id == 10:
-        return DiaryWithPhotos(
-            id=10,
-            user_id=_MOCK_USER_ID,
-            diary_date=date(2026, 1, 18),
-            time_type="dinner",
-            analysis_status="processing",
-            restaurant_name=None,
-            restaurant_url=None,
-            road_address=None,
-            category=None,
-            cover_photo_id=95,
-            cover_photo_url="https://picsum.photos/seed/diary10/400/300",
-            note=None,
-            tags=[],
-            photo_count=2,
-            created_at=datetime(2026, 1, 18, 19, 0),
-            updated_at=datetime(2026, 1, 18, 19, 0),
-            photos=[
-                PhotoInDiary(
-                    photo_id=95,
-                    image_url="https://picsum.photos/seed/photo95/400/300",
-                ),
-                PhotoInDiary(
-                    photo_id=96,
-                    image_url="https://picsum.photos/seed/photo96/400/300",
-                ),
-            ],
-        )
-    # 기본값
-    return DiaryWithPhotos(
-        id=diary_id,
-        user_id=_MOCK_USER_ID,
-        diary_date=date(2026, 1, 20),
-        time_type="breakfast",
-        analysis_status="done",
-        restaurant_name="스타벅스",
-        restaurant_url="https://place.map.kakao.com/34567890",
-        road_address="서울 강남구 역삼동 123-45",
-        category="etc",
-        cover_photo_id=200,
-        cover_photo_url="https://picsum.photos/seed/default/400/300",
-        note="모닝 커피",
-        tags=["아메리카노"],
-        photo_count=1,
-        created_at=datetime(2026, 1, 20, 8, 0),
-        updated_at=datetime(2026, 1, 20, 8, 5),
-        photos=_mock_photos(20260120, 1, 200),
-    )

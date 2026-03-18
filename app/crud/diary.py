@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,35 @@ async def get_diary(
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def get_diaries_by_date_range(
+    session: AsyncSession,
+    user_id: UUID,
+    start_date: date,
+    end_date: date,
+) -> list[Diary]:
+    start_bound = datetime.combine(start_date, datetime.min.time(), tzinfo=UTC)
+    end_bound = datetime.combine(end_date, datetime.min.time(), tzinfo=UTC) + timedelta(
+        days=1
+    )
+    stmt = (
+        select(Diary)
+        .where(
+            Diary.user_id == user_id,
+            Diary.diary_date >= start_bound,
+            Diary.diary_date < end_bound,
+            Diary.deleted_at.is_(None),
+        )
+        .options(
+            selectinload(Diary.photos),
+            selectinload(Diary.cover_photo),
+            selectinload(Diary.analysis),
+        )
+        .order_by(Diary.diary_date, Diary.time_type)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def delete_photos(
