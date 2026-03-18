@@ -25,9 +25,13 @@ from app.schemas.diary import (
 from app.schemas.restaurant import RestaurantListResponse
 from app.services import diary_service, llm_service, restaurant_service
 from app.services.diary_service import _build_tags, _merge_date_with_cover_taken_at
+from app.usecases import diary as diary_usecase
+from app.usecases.diary import DiaryNotFoundError, PhotoRequiredError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
+
+DIARY_NOT_FOUND = "다이어리를 찾을 수 없거나 접근 권한이 없습니다."
 
 
 DATE_RANGE_RESPONSE_EXAMPLE = {
@@ -233,7 +237,7 @@ async def get_diary_by_id(
     if diary is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Diary not found or you don't have access.",
+            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
         )
     return diary
 
@@ -274,7 +278,7 @@ async def get_diary_blog_text(
     if diary is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Diary not found or you don't have access.",
+            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
         )
 
     diary_info = {
@@ -304,7 +308,7 @@ async def get_diary_blog_text(
 async def update_diary(
     diary_id: int,
     body: DiaryUpdate,
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_session_v2),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -312,15 +316,18 @@ async def update_diary(
 
     전달된 필드만 반영. photo_ids가 있으면 해당 ID만 유지·순서 반영, 나머지 사진 삭제.
     """
-    diary = await diary_service.update_diary(
-        db=db, user_id=user_id, diary_id=diary_id, body=body
-    )
-    if diary is None:
+    try:
+        return await diary_usecase.update_diary(db, user_id, diary_id, body)
+    except DiaryNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Diary not found or you don't have access.",
-        )
-    return diary
+            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
+        ) from e
+    except PhotoRequiredError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="최소 1개의 사진이 필요합니다.",
+        ) from e
 
 
 @router.post(
@@ -367,7 +374,7 @@ async def add_diary_photos(
     if photo_ids is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Diary not found or you don't have access.",
+            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
         )
     return AddDiaryPhotosResponse(photo_ids=photo_ids)
 
@@ -388,7 +395,7 @@ async def delete_diary(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Diary not found or you don't have access.",
+            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
         )
 
 

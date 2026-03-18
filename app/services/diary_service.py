@@ -4,13 +4,13 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import UploadFile
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models import Diary, Photo
-from app.schemas.diary import DiaryUpdate, DiaryWithPhotos, PhotoInDiary
+from app.schemas.diary import DiaryWithPhotos, PhotoInDiary
 from app.utils.file_storage import save_user_photo
 
 # 다이어리당 최대 사진 개수
@@ -148,13 +148,10 @@ async def get_diary_by_id(
 
     status = diary.analysis_status or "done"
     cover_photo_url = diary.get_cover_photo_url(settings.IMAGE_BASE_URL)
-
-    diary_date_only = _merge_date_with_cover_taken_at(diary)
     photos = [
         PhotoInDiary(
             photo_id=p.id,
             image_url=p.get_full_url(settings.IMAGE_BASE_URL),
-            analysis_status=status,
         )
         for p in sorted(diary.photos, key=lambda x: x.id)
     ]
@@ -162,7 +159,7 @@ async def get_diary_by_id(
     return DiaryWithPhotos(
         id=diary.id,
         user_id=diary.user_id,
-        diary_date=diary_date_only,
+        diary_date=_merge_date_with_cover_taken_at(diary),
         time_type=diary.time_type,
         analysis_status=status,
         restaurant_name=diary.restaurant_name,
@@ -178,86 +175,6 @@ async def get_diary_by_id(
         updated_at=diary.updated_at,
         photos=photos,
     )
-
-
-async def update_diary(
-    db: AsyncSession,
-    user_id: UUID,
-    diary_id: int,
-    body: DiaryUpdate,
-) -> DiaryWithPhotos | None:
-    """
-    다이어리 수정. 소유자 검증 후 전달된 필드만 업데이트.
-    photo_ids가 있으면 해당 ID만 유지·순서 반영, 나머지 사진은 삭제.
-    """
-    stmt = (
-        select(Diary)
-        .where(
-            Diary.id == diary_id,
-            Diary.user_id == user_id,
-            Diary.deleted_at.is_(None),
-        )
-        .options(
-            selectinload(Diary.photos),
-            selectinload(Diary.cover_photo),
-            selectinload(Diary.analysis),
-        )
-    )
-    result = await db.execute(stmt)
-    diary = result.scalar_one_or_none()
-    if diary is None:
-        return None
-
-    # 전달된 필드만 반영 (None이 아닌 값만)
-    if body.category is not None:
-        diary.category = body.category
-    if body.restaurant_name is not None:
-        diary.restaurant_name = body.restaurant_name
-    if body.restaurant_url is not None:
-        diary.restaurant_url = body.restaurant_url
-    if body.road_address is not None:
-        diary.road_address = body.road_address
-    if body.address_name is not None:
-        diary.address_name = body.address_name
-    if body.note is not None:
-        diary.note = body.note
-    if body.cover_photo_id is not None:
-        diary.cover_photo_id = body.cover_photo_id
-    if body.tags is not None:
-        diary.tags = body.tags
-
-    if body.photo_ids is not None:
-        # 이 다이어리 소속인지 검증
-        check = await db.execute(
-            select(Photo.id).where(
-                Photo.diary_id == diary_id,
-                Photo.id.in_(body.photo_ids),
-            )
-        )
-        valid_ids = {r[0] for r in check.fetchall()}
-        if len(valid_ids) != len(body.photo_ids):
-            # 다른 다이어리 사진이 포함됨 → 무시하거나 400. 여기서는 유효한 ID만 사용
-            photo_ids_ordered = [pid for pid in body.photo_ids if pid in valid_ids]
-        else:
-            photo_ids_ordered = body.photo_ids
-
-        if photo_ids_ordered:
-            await db.execute(
-                delete(Photo).where(
-                    Photo.diary_id == diary_id,
-                    Photo.id.notin_(photo_ids_ordered),
-                )
-            )
-        else:
-            await db.execute(delete(Photo).where(Photo.diary_id == diary_id))
-        diary.photo_count = len(photo_ids_ordered)
-        if diary.cover_photo_id not in photo_ids_ordered:
-            diary.cover_photo_id = photo_ids_ordered[0] if photo_ids_ordered else None
-
-    await db.commit()
-    # 세션의 모든 객체를 만료시켜 다음 조회 시 DB에서 최신 데이터 로드
-    db.expire_all()
-    return await get_diary_by_id(db, user_id, diary_id)
 
 
 async def add_photos_to_diary(
