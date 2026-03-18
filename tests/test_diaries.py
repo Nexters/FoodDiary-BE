@@ -1010,6 +1010,163 @@ class TestDeleteDiary:
         # Then: 404 에러
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_delete_diary_photos_deleted(self, test_client, test_db_session):
+        """
+        다이어리 삭제 시 연결된 photo 레코드도 DB에서 삭제됨
+
+        Given: 사진 2개가 있는 다이어리
+        When: DELETE /diaries/{diary_id} 호출
+        Then: 204, DB에서 photo 레코드 0개
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=2))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        photo1 = Photo(**create_photo_data(diary.id, "storage/photo1.jpg"))
+        photo2 = Photo(**create_photo_data(diary.id, "storage/photo2.jpg"))
+        test_db_session.add_all([photo1, photo2])
+        await test_db_session.commit()
+
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
+        response = await test_client.delete(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Then
+        assert response.status_code == 204
+
+        result = await test_db_session.execute(
+            sa_select(Photo).where(Photo.diary_id == diary.id)
+        )
+        assert result.scalars().all() == []
+
+    @pytest.mark.asyncio
+    async def test_delete_diary_photo_files_deleted(
+        self, test_client, test_db_session, tmp_path
+    ):
+        """
+        다이어리 삭제 시 커밋 후 사진 파일도 삭제됨 (after_commit 이벤트)
+
+        Given: 실제 임시 파일을 가리키는 photo URL, 사진 2개인 다이어리
+        When: DELETE 호출 + 명시적 commit + asyncio.sleep(0.1)
+        Then: 204, tmp_file.exists() == False
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary = Diary(**create_diary_data(user_id=user.id, photo_count=2))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        tmp_file1 = tmp_path / "photo1.jpg"
+        tmp_file2 = tmp_path / "photo2.jpg"
+        tmp_file1.write_bytes(b"fake image data")
+        tmp_file2.write_bytes(b"fake image data")
+
+        photo1 = Photo(**create_photo_data(diary.id, str(tmp_file1)))
+        photo2 = Photo(**create_photo_data(diary.id, str(tmp_file2)))
+        test_db_session.add_all([photo1, photo2])
+        await test_db_session.commit()
+
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
+        response = await test_client.delete(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        await test_db_session.commit()
+        await asyncio.sleep(0.1)  # after_commit 이벤트 발화 대기
+
+        # Then
+        assert response.status_code == 204
+        assert not tmp_file1.exists()
+        assert not tmp_file2.exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_diary_forbidden(self, test_client, test_db_session):
+        """
+        다른 사용자의 다이어리 삭제 → 404 (권한 정보 노출 방지)
+
+        Given: user1의 다이어리, user2의 토큰
+        When: user2가 user1의 다이어리 삭제 시도
+        Then: 404 Not Found
+        """
+        # Given
+        user1 = User(**create_test_user_data(email="user1@example.com"))
+        user2 = User(
+            **create_test_user_data(
+                email="user2@example.com", provider_user_id="user_2"
+            )
+        )
+        test_db_session.add_all([user1, user2])
+        await test_db_session.commit()
+        await test_db_session.refresh(user1)
+        await test_db_session.refresh(user2)
+
+        diary = Diary(**create_diary_data(user_id=user1.id, photo_count=1))
+        test_db_session.add(diary)
+        await test_db_session.commit()
+
+        token = create_access_token(str(user2.id), user2.provider)
+
+        # When: user2가 user1의 다이어리 삭제 시도
+        response = await test_client.delete(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Then
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delete_diary_soft_deleted(self, test_client, test_db_session):
+        """
+        이미 소프트 삭제된 다이어리 삭제 → 404
+
+        Given: deleted_at이 설정된 다이어리
+        When: DELETE 호출
+        Then: 404 (crud의 deleted_at.is_(None) 필터)
+        """
+        # Given
+        user = User(**create_test_user_data())
+        test_db_session.add(user)
+        await test_db_session.commit()
+        await test_db_session.refresh(user)
+
+        diary_data = create_diary_data(user_id=user.id, photo_count=1)
+        diary_data["deleted_at"] = datetime.now(UTC)
+        diary = Diary(**diary_data)
+        test_db_session.add(diary)
+        await test_db_session.commit()
+        await test_db_session.refresh(diary)
+
+        token = create_access_token(str(user.id), user.provider)
+
+        # When
+        response = await test_client.delete(
+            f"/diaries/{diary.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Then
+        assert response.status_code == 404
+
 
 class TestAddDiaryPhotos:
     """POST /diaries/{diary_id}/photos 테스트 (사진 추가)"""
