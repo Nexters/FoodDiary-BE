@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,3 +34,8 @@ async def delete_photos(
     if not photo_ids:
         return
     await session.execute(delete(Photo).where(Photo.id.in_(photo_ids)))
+
+
+async def delete_diary(session: AsyncSession, diary: Diary) -> None:
+    diary.deleted_at = datetime.now(UTC)
+    await session.flush()

@@ -139,3 +139,28 @@ async def add_diary_photos(
     )
     diary.photo_count += len(photos)
     return [photo.id for photo in photos]
+
+
+async def delete_diary(
+    session: AsyncSession,
+    user_id: UUID,
+    diary_id: int,
+) -> None:
+    diary = await crud_diary.get_diary(session, diary_id)
+    if diary is None or diary.user_id != user_id:
+        raise DiaryNotFoundError
+
+    image_urls_to_delete = [p.image_url for p in diary.photos]
+    photo_ids = {p.id for p in diary.photos}
+    await crud_diary.delete_photos(session, photo_ids)
+    await crud_diary.delete_diary(session, diary)
+
+    # 트랜잭션 커밋 이후 사진 파일 삭제
+    event.listen(
+        session.sync_session,
+        "after_commit",
+        lambda _: asyncio.create_task(
+            photo_service.delete_photo_files(image_urls_to_delete)
+        ),
+        once=True,
+    )

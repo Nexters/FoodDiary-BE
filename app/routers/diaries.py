@@ -385,21 +385,20 @@ async def add_diary_photos(
 @router.delete("/{diary_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_diary(
     diary_id: int,
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_session_v2),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
     다이어리 전체 삭제 (수정 화면 "삭제" 버튼).
     소프트 삭제(deleted_at 설정). 소유자만 가능.
     """
-    deleted = await diary_service.delete_diary(
-        db=db, user_id=user_id, diary_id=diary_id
-    )
-    if not deleted:
+    try:
+        await diary_usecase.delete_diary(db, user_id, diary_id)
+    except DiaryNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="다이어리를 찾을 수 없거나 접근 권한이 없습니다.",
-        )
+            detail=DIARY_NOT_FOUND,
+        ) from e
 
 
 # ========================================
