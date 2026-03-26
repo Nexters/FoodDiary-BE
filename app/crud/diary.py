@@ -28,6 +28,27 @@ async def get_diary(
     return result.scalar_one_or_none()
 
 
+async def get_diary_for_update(
+    session: AsyncSession,
+    diary_id: int,
+) -> Diary | None:
+    stmt = (
+        select(Diary)
+        .where(
+            Diary.id == diary_id,
+            Diary.deleted_at.is_(None),
+        )
+        .with_for_update()
+        .options(
+            selectinload(Diary.photos),
+            selectinload(Diary.cover_photo),
+            selectinload(Diary.analysis),
+        )
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def get_diaries_by_date_range(
     session: AsyncSession,
     user_id: UUID,

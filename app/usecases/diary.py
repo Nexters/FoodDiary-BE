@@ -163,7 +163,7 @@ async def add_diary_photos(
     diary_id: int,
     files: list[UploadFile],
 ) -> list[int]:
-    diary = await crud_diary.get_diary(session, diary_id)
+    diary = await crud_diary.get_diary_for_update(session, diary_id)
     if diary is None or diary.user_id != user_id:
         raise DiaryNotFoundError
 
