@@ -5,6 +5,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -25,6 +26,14 @@ from app.utils.file_storage import save_user_photo
 from app.utils.time_classifier import classify_time_type
 
 logger = logging.getLogger(__name__)
+
+
+async def delete_photo_files(image_urls: list[str]) -> None:
+    """사진 파일을 실제 스토리지에서 삭제합니다."""
+    for image_url in image_urls:
+        path = Path(image_url)
+        if path.exists():
+            await asyncio.to_thread(path.unlink)
 
 
 @dataclass
