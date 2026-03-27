@@ -40,10 +40,6 @@ class DateRangeTooLongError(Exception):
     pass
 
 
-class DateRangeFutureError(Exception):
-    pass
-
-
 async def get_diaries_by_date_range(
     session: AsyncSession,
     user_id: UUID,
@@ -54,8 +50,6 @@ async def get_diaries_by_date_range(
         raise DateRangeInvalidError
     if (end_date - start_date).days > 42:
         raise DateRangeTooLongError
-    if end_date > date.today():
-        raise DateRangeFutureError
     diaries = await crud_diary.get_diaries_by_date_range(
         session, user_id, start_date, end_date
     )

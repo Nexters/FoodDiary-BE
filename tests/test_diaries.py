@@ -294,31 +294,6 @@ class TestGetDiaries:
         # Then
         assert response.status_code == 400
 
-    @pytest.mark.asyncio
-    async def test_get_diaries_future_date(self, test_client, test_db_session):
-        """
-        미래 날짜 조회 시 400
-
-        Given: 유효한 사용자
-        When: GET /diaries?start_date=2099-12-01&end_date=2099-12-10
-        Then: 400 (DateRangeFutureError)
-        """
-        # Given
-        user = User(**create_test_user_data())
-        test_db_session.add(user)
-        await test_db_session.commit()
-
-        token = create_access_token(str(user.id), user.provider)
-
-        # When
-        response = await test_client.get(
-            "/diaries?start_date=2099-12-01&end_date=2099-12-10",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-        # Then
-        assert response.status_code == 400
-
 
 class TestGetDiariesSummary:
     """GET /diaries/summary 테스트 (캘린더 뷰용 사진 목록 조회)"""

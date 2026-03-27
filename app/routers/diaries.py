@@ -29,7 +29,6 @@ from app.schemas.restaurant import RestaurantListResponse
 from app.services import diary_service, llm_service, restaurant_service
 from app.usecases import diary as diary_usecase
 from app.usecases.diary import (
-    DateRangeFutureError,
     DateRangeInvalidError,
     DateRangeTooLongError,
     DiaryNotFoundError,
@@ -100,11 +99,6 @@ async def get_diaries_by_date_range(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="날짜 범위는 42일 이내여야 합니다.",
-        ) from e
-    except DateRangeFutureError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="종료 날짜는 오늘 이후일 수 없습니다.",
         ) from e
     return {"diaries": diaries}
 
@@ -184,11 +178,6 @@ async def get_diaries_summary_by_date_range(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="날짜 범위는 42일 이내여야 합니다.",
-        ) from e
-    except DateRangeFutureError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="종료 날짜는 오늘 이후일 수 없습니다.",
         ) from e
     return _build_date_photos_response(start_date, end_date, diaries)
 
