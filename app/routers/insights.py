@@ -21,7 +21,7 @@ from app.schemas.insights import (
     WeeklyStats,
     WeekStat,
 )
-from app.services.insights import InsufficientDataError, generate_insights
+from app.usecases.insights import InsufficientDataError, generate_insights
 
 router = APIRouter(prefix="/me", tags=["Insights"])
 
@@ -111,7 +111,9 @@ def _get_mock_insights() -> InsightsResponse:
     week_counts = [random.randint(0, 10) for _ in range(4)]
     most_active_week = week_counts.index(max(week_counts)) + 1
 
-    now = datetime.now()
+    from app.utils.timezone import KST
+
+    now = datetime.now(KST)
     return InsightsResponse(
         month=now.strftime("%Y-%m"),
         photo_stats=PhotoStats(

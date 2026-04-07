@@ -1,5 +1,7 @@
-from datetime import UTC, datetime
+from datetime import date, datetime
 from uuid import UUID
+
+from app.utils.timezone import KST, kst_date_to_utc
 
 
 def create_current_month_diaries(
@@ -8,7 +10,7 @@ def create_current_month_diaries(
     base_photo_count: int = 5,
 ) -> list[dict]:
     """이번 달 다이어리 데이터 생성 (일별 1개, 기본 7일)"""
-    now = datetime.now(UTC)
+    now = datetime.now(KST)
     current_year = now.year
     current_month = now.month
 
@@ -20,14 +22,7 @@ def create_current_month_diaries(
         diaries.append(
             {
                 "user_id": user_id,
-                "diary_date": datetime(
-                    current_year,
-                    current_month,
-                    i + 1,  # 1, 2, 3, ... (모든 달에서 안전)
-                    8 + (i % 12),  # 8, 9, 10, ... (유효한 시간)
-                    0,
-                    tzinfo=UTC,
-                ),
+                "diary_date": kst_date_to_utc(date(current_year, current_month, i + 1)),
                 "time_type": time_types[i % len(time_types)],
                 "category": categories[i % len(categories)],
                 "photo_count": base_photo_count + i,
@@ -44,7 +39,7 @@ def create_previous_month_diaries(
     base_photo_count: int = 3,
 ) -> list[dict]:
     """저번 달 다이어리 데이터 생성"""
-    now = datetime.now(UTC)
+    now = datetime.now(KST)
     current_year = now.year
     current_month = now.month
 
@@ -64,13 +59,8 @@ def create_previous_month_diaries(
         diaries.append(
             {
                 "user_id": user_id,
-                "diary_date": datetime(
-                    previous_year,
-                    previous_month,
-                    (i * 10) + 1,  # 1, 11, 21, ...
-                    12,
-                    0,
-                    tzinfo=UTC,
+                "diary_date": kst_date_to_utc(
+                    date(previous_year, previous_month, (i * 10) + 1)
                 ),
                 "time_type": time_types[i % len(time_types)],
                 "category": categories[i % len(categories)],
