@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud import diary as crud_diary
 from app.schemas.insights import InsightsResponse
 from app.services import insights as insights_service
+from app.utils.timezone import KST
 
 
 class InsufficientDataError(Exception):
@@ -18,8 +19,6 @@ async def generate_insights(
     session: AsyncSession,
     user_id: UUID,
 ) -> InsightsResponse:
-    from app.utils.timezone import KST
-
     now = datetime.now(KST)
     current_year, current_month = now.year, now.month
 

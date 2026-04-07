@@ -7,8 +7,6 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
--- Set timezone
-
 -- Create custom types (필요시 추가)
 -- Example: CREATE TYPE status_type AS ENUM ('active', 'inactive');
 

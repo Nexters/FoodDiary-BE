@@ -111,7 +111,7 @@ def _get_mock_insights() -> InsightsResponse:
     week_counts = [random.randint(0, 10) for _ in range(4)]
     most_active_week = week_counts.index(max(week_counts)) + 1
 
-    from app.utils.timezone import KST
+    from app.utils.timezone import KST  # mock 함수 내부에서만 사용
 
     now = datetime.now(KST)
     return InsightsResponse(
