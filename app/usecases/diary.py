@@ -18,6 +18,7 @@ from app.services.diary_service import (
     _merge_date_with_cover_taken_at,
 )
 from app.utils.file_storage import save_user_photo
+from app.utils.timezone import utc_to_kst_naive
 
 
 class DiaryNotFoundError(Exception):
@@ -140,8 +141,8 @@ def _build_diary_with_photos(diary: Diary, photos: list[Photo]) -> DiaryWithPhot
         note=diary.note,
         tags=_build_tags(diary),
         photo_count=diary.photo_count,
-        created_at=diary.created_at,
-        updated_at=diary.updated_at,
+        created_at=utc_to_kst_naive(diary.created_at),
+        updated_at=utc_to_kst_naive(diary.updated_at),
         photos=[
             PhotoInDiary(
                 photo_id=p.id, image_url=p.get_full_url(settings.IMAGE_BASE_URL)

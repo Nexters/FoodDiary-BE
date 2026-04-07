@@ -8,7 +8,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- Set timezone
-SET timezone = 'Asia/Seoul';
 
 -- Create custom types (필요시 추가)
 -- Example: CREATE TYPE status_type AS ENUM ('active', 'inactive');
@@ -24,10 +23,10 @@ CREATE TABLE IF NOT EXISTS users (
     provider_user_id VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(30) NOT NULL DEFAULT '',
-    last_login_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP,
+    last_login_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
 
     CONSTRAINT unique_provider_user UNIQUE (provider, provider_user_id)
 );
@@ -56,9 +55,9 @@ CREATE TABLE IF NOT EXISTS diaries (
     note TEXT,
     tags JSONB DEFAULT '[]'::jsonb,
     photo_count INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Diaries 테이블 인덱스
@@ -84,7 +83,7 @@ COMMENT ON COLUMN diaries.address_name IS '지번 주소 (예: 서울 마포구 
 CREATE TABLE IF NOT EXISTS diary_analysis (
     diary_id INTEGER PRIMARY KEY REFERENCES diaries(id) ON DELETE CASCADE,
     result JSONB NOT NULL DEFAULT '[]'::jsonb,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ======================
@@ -95,7 +94,7 @@ CREATE TABLE IF NOT EXISTS photos (
     id SERIAL PRIMARY KEY,
     diary_id INTEGER NOT NULL REFERENCES diaries(id) ON DELETE CASCADE,
     image_url TEXT NOT NULL,
-    taken_at TIMESTAMP,
+    taken_at TIMESTAMP WITH TIME ZONE,
     taken_location VARCHAR(100),  -- "latitude,longitude" 형식 (예: "37.5186,126.9305")
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -119,9 +118,9 @@ CREATE TABLE IF NOT EXISTS devices (
     device_token VARCHAR(255),
     app_version VARCHAR(20) NOT NULL,
     os_version VARCHAR(20) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Devices 테이블 인덱스

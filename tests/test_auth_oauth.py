@@ -29,7 +29,7 @@ async def test_login_existing_user_updates_last_login(
     test_db_session.add(existing_user)
     await test_db_session.commit()
 
-    original_last_login = existing_user.last_login_at.replace(tzinfo=None)
+    original_last_login = existing_user.last_login_at
 
     # When: Login with existing user credentials
     payload = create_login_request_payload()
@@ -245,7 +245,7 @@ async def test_google_login_existing_user(
     test_db_session.add(existing_user)
     await test_db_session.commit()
 
-    original_last_login = existing_user.last_login_at.replace(tzinfo=None)
+    original_last_login = existing_user.last_login_at
 
     # When: Login with existing Google account
     payload = create_login_request_payload(provider="google", id_token="google_token")

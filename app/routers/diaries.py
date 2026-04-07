@@ -35,6 +35,7 @@ from app.usecases.diary import (
     PhotoLimitExceededError,
     PhotoRequiredError,
 )
+from app.utils.timezone import utc_to_kst_naive
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diaries", tags=["diaries"])
@@ -257,7 +258,7 @@ async def get_diary_blog_text(
         "category": diary.category,
         "note": diary.note,
         "tags": diary.tags,
-        "diary_date": diary.diary_date.isoformat(),
+        "diary_date": utc_to_kst_naive(diary.diary_date).isoformat(),
         "time_type_ko": llm_service.TIME_TYPE_KO.get(diary.time_type, diary.time_type),
         "restaurant_url": diary.restaurant_url,
     }

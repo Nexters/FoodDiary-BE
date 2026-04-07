@@ -6,6 +6,8 @@ from typing import TypedDict
 from PIL import Image
 from PIL.ExifTags import GPSTAGS, TAGS
 
+from app.utils.timezone import kst_naive_to_utc
+
 
 class ExifData(TypedDict):
     """EXIF 데이터 타입"""
@@ -49,7 +51,8 @@ def extract_exif_data(file) -> ExifData:
             # 촬영 시간
             if tag == "DateTimeOriginal":
                 try:
-                    result["taken_at"] = datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
+                    naive = datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
+                    result["taken_at"] = kst_naive_to_utc(naive)
                 except ValueError:
                     pass
 

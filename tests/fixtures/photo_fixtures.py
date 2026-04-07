@@ -1,7 +1,7 @@
 """사진 업로드 테스트용 fixture 함수들"""
 
 import io
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import UploadFile
 from PIL import Image
@@ -37,7 +37,7 @@ def mock_exif_data(
 ) -> dict:
     """고정 ExifData 반환"""
     return {
-        "taken_at": taken_at or datetime(2026, 1, 15, 12, 30, 0),
+        "taken_at": taken_at or datetime(2026, 1, 15, 3, 30, 0, tzinfo=UTC),
         "latitude": latitude,
         "longitude": longitude,
     }
