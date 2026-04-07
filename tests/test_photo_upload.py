@@ -1,6 +1,6 @@
 """batch_upload_photos_sync 서비스 통합 테스트"""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import select
@@ -71,7 +71,9 @@ async def test_single_photo_upload(test_db_session, patch_photo_externals):
     test_db_session.add(user)
     await test_db_session.commit()
 
-    patch_photo_externals(taken_at=datetime(2026, 1, 15, 12, 0, 0))  # lunch
+    patch_photo_externals(
+        taken_at=datetime(2026, 1, 15, 3, 0, 0, tzinfo=UTC)
+    )  # KST 12:00 = lunch
     file_buffers = await _to_file_buffers([create_test_upload_file()])
 
     # When
@@ -111,7 +113,9 @@ async def test_two_photos_same_meal(test_db_session, patch_photo_externals):
     test_db_session.add(user)
     await test_db_session.commit()
 
-    patch_photo_externals(taken_at=datetime(2026, 1, 15, 12, 0, 0))  # lunch
+    patch_photo_externals(
+        taken_at=datetime(2026, 1, 15, 3, 0, 0, tzinfo=UTC)
+    )  # KST 12:00 = lunch
     file_buffers = await _to_file_buffers(
         [create_test_upload_file("a.jpg"), create_test_upload_file("b.jpg")]
     )
@@ -154,8 +158,12 @@ async def test_two_photos_different_meals(test_db_session, monkeypatch):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return mock_exif_data(taken_at=datetime(2026, 1, 15, 8, 0, 0))  # breakfast
-        return mock_exif_data(taken_at=datetime(2026, 1, 15, 19, 0, 0))  # dinner
+            return mock_exif_data(
+                taken_at=datetime(2026, 1, 14, 23, 0, 0, tzinfo=UTC)
+            )  # KST 8:00 = breakfast
+        return mock_exif_data(
+            taken_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC)
+        )  # KST 19:00 = dinner
 
     monkeypatch.setattr("app.services.photo_service.extract_exif_data", mock_exif)
     monkeypatch.setattr(
