@@ -116,10 +116,11 @@ def calculate_diary_time_stats(current_diaries: list[Diary]) -> DiaryTimeStats:
             return utc_to_kst(d.cover_photo.taken_at)
         return utc_to_kst(d.diary_date)
 
-    slot_counter: Counter = Counter(
-        f"{_get_kst_time(d).hour:02d}:{(_get_kst_time(d).minute // 30) * 30:02d}"
-        for d in current_diaries
-    )
+    slot_counter: Counter = Counter()
+    for d in current_diaries:
+        kst_time = _get_kst_time(d)
+        slot = f"{kst_time.hour:02d}:{(kst_time.minute // 30) * 30:02d}"
+        slot_counter[slot] += 1
     most_active_time = slot_counter.most_common(1)[0][0]
     distribution = [
         TimeSlotDistribution(time=slot, count=count)
