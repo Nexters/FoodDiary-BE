@@ -3,6 +3,8 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+from app.utils.timezone import kst_date_to_utc
+
 
 def create_diary_data(
     user_id: UUID,
@@ -47,9 +49,8 @@ def create_photo_data(
         "image_url": image_url,
         "taken_at": taken_at,
         "taken_location": None,
-        # Photo 모델은 datetime.utcnow를 사용하므로 timezone-naive로 생성
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
 
 
@@ -81,8 +82,7 @@ def create_diary_analysis_data(
     return {
         "diary_id": diary_id,
         "result": result,
-        # DiaryAnalysis 모델은 datetime.utcnow를 사용하므로 timezone-naive로 생성
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(UTC),
     }
 
 
@@ -102,10 +102,8 @@ def create_multiple_diaries_by_date(
     """
     diaries = []
     for date_str, time_type in dates:
-        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-        diary_date = datetime(
-            date_obj.year, date_obj.month, date_obj.day, 12, 0, tzinfo=UTC
-        )
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+        diary_date = kst_date_to_utc(date_obj)
         diaries.append(
             create_diary_data(
                 user_id=user_id,

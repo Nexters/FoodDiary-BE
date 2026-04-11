@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Diary, Photo
+from app.utils.timezone import kst_date_to_utc
 
 
 async def get_diary(
@@ -55,10 +56,8 @@ async def get_diaries_by_date_range(
     start_date: date,
     end_date: date,
 ) -> list[Diary]:
-    start_bound = datetime.combine(start_date, datetime.min.time(), tzinfo=UTC)
-    end_bound = datetime.combine(end_date, datetime.min.time(), tzinfo=UTC) + timedelta(
-        days=1
-    )
+    start_bound = kst_date_to_utc(start_date)
+    end_bound = kst_date_to_utc(end_date + timedelta(days=1))
     stmt = (
         select(Diary)
         .where(
@@ -74,6 +73,27 @@ async def get_diaries_by_date_range(
         )
         .order_by(Diary.diary_date, Diary.time_type)
     )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_diaries_for_insights(
+    session: AsyncSession,
+    user_id: UUID,
+    start: datetime,
+    end: datetime,
+    *,
+    load_cover_photo: bool = False,
+) -> list[Diary]:
+    """기간 내 다이어리 경량 조회 (start inclusive, end exclusive, UTC datetime)"""
+    stmt = select(Diary).where(
+        Diary.user_id == user_id,
+        Diary.diary_date >= start,
+        Diary.diary_date < end,
+        Diary.deleted_at.is_(None),
+    )
+    if load_cover_photo:
+        stmt = stmt.options(selectinload(Diary.cover_photo))
     result = await session.execute(stmt)
     return list(result.scalars().all())
 

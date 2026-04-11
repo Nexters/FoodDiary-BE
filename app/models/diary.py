@@ -109,7 +109,9 @@ class DiaryAnalysis(Base):
     )
     result: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.utcnow
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
     )
 
     # Relationships

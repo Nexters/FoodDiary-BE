@@ -1,10 +1,5 @@
 from collections import Counter
-from datetime import datetime, timedelta, timezone
-from uuid import UUID
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from datetime import date, datetime
 
 from app.models.diary import Diary
 from app.schemas.insights import (
@@ -12,7 +7,6 @@ from app.schemas.insights import (
     CategoryInfo,
     CategoryStats,
     DiaryTimeStats,
-    InsightsResponse,
     LocationStat,
     PhotoStats,
     TagStat,
@@ -20,88 +14,12 @@ from app.schemas.insights import (
     WeeklyStats,
     WeekStat,
 )
+from app.utils.timezone import kst_date_to_utc, utc_to_kst
 
 MIN_DIARY_THRESHOLD = 7
 
 _ALL_CATEGORIES = ("korean", "chinese", "japanese", "western", "etc", "home_cooked")
 _DONG_LEVEL_SUFFIXES = ("동", "리", "가", "로")
-
-
-class InsufficientDataError(Exception):
-    """통계 생성에 필요한 최소 데이터 부족"""
-
-    pass
-
-
-async def generate_insights(
-    session: AsyncSession,
-    user_id: UUID,
-) -> InsightsResponse:
-    """
-    사용자 인사이트 생성 (메인 함수)
-
-    Args:
-        session: DB 세션
-        user_id: 사용자 UUID
-
-    Returns:
-        InsightsResponse 모델
-
-    Raises:
-        InsufficientDataError: 데이터가 부족한 경우
-    """
-    kst = timezone(timedelta(hours=9))
-    now = datetime.now(kst)
-    current_year = now.year
-    current_month = now.month
-
-    current_range = get_month_date_range(current_year, current_month)
-
-    if current_month == 1:
-        previous_range = get_month_date_range(current_year - 1, 12)
-    else:
-        previous_range = get_month_date_range(current_year, current_month - 1)
-
-    current_result = await session.execute(
-        select(Diary)
-        .options(selectinload(Diary.cover_photo))
-        .where(
-            Diary.user_id == user_id,
-            Diary.diary_date >= current_range[0],
-            Diary.diary_date < current_range[1],
-            Diary.deleted_at.is_(None),
-        )
-    )
-    current_diaries = list(current_result.scalars().all())
-
-    previous_result = await session.execute(
-        select(Diary).where(
-            Diary.user_id == user_id,
-            Diary.diary_date >= previous_range[0],
-            Diary.diary_date < previous_range[1],
-            Diary.deleted_at.is_(None),
-        )
-    )
-    previous_diaries = list(previous_result.scalars().all())
-
-    _check_minimum_data(current_diaries)
-
-    photo_stats = calculate_photo_stats(current_diaries, previous_diaries)
-    category_stats = calculate_category_stats(current_diaries, previous_diaries)
-    tag_stats = calculate_tag_stats(current_diaries)
-    location_stats = calculate_location_stats(current_diaries)
-    time_stats = calculate_diary_time_stats(current_diaries)
-    weekly_stats = calculate_weekly_stats(current_diaries)
-
-    return InsightsResponse(
-        month=f"{current_year:04d}-{current_month:02d}",
-        photo_stats=photo_stats,
-        category_stats=category_stats,
-        weekly_stats=weekly_stats,
-        diary_time_stats=time_stats,
-        tag_stats=tag_stats,
-        location_stats=location_stats,
-    )
 
 
 def calculate_photo_stats(
@@ -193,15 +111,16 @@ def calculate_diary_time_stats(current_diaries: list[Diary]) -> DiaryTimeStats:
     if not current_diaries:
         return DiaryTimeStats(most_active_time="12:00", distribution=[])
 
-    def _get_time(d: Diary) -> datetime:
+    def _get_kst_time(d: Diary) -> datetime:
         if d.cover_photo and d.cover_photo.taken_at:
-            return d.cover_photo.taken_at
-        return d.diary_date
+            return utc_to_kst(d.cover_photo.taken_at)
+        return utc_to_kst(d.diary_date)
 
-    slot_counter: Counter = Counter(
-        f"{_get_time(d).hour:02d}:{(_get_time(d).minute // 30) * 30:02d}"
-        for d in current_diaries
-    )
+    slot_counter: Counter = Counter()
+    for d in current_diaries:
+        kst_time = _get_kst_time(d)
+        slot = f"{kst_time.hour:02d}:{(kst_time.minute // 30) * 30:02d}"
+        slot_counter[slot] += 1
     most_active_time = slot_counter.most_common(1)[0][0]
     distribution = [
         TimeSlotDistribution(time=slot, count=count)
@@ -215,7 +134,7 @@ def calculate_weekly_stats(current_diaries: list[Diary]) -> WeeklyStats:
     """이번 달 주차별 다이어리 수 계산"""
     week_counter: Counter = Counter()
     for diary in current_diaries:
-        week_num = (diary.diary_date.day - 1) // 7 + 1
+        week_num = (utc_to_kst(diary.diary_date).day - 1) // 7 + 1
         week_counter[week_num] += 1
 
     most_active_week = week_counter.most_common(1)[0][0] if week_counter else 1
@@ -227,14 +146,10 @@ def calculate_weekly_stats(current_diaries: list[Diary]) -> WeeklyStats:
     return WeeklyStats(most_active_week=most_active_week, weekly_counts=weekly_counts)
 
 
-def _check_minimum_data(diaries: list[Diary]) -> None:
-    """데이터 최소 임계값 검사. 이번 달 7일 이상 기록해야 인사이트 제공."""
-    unique_days = len({d.diary_date.date() for d in diaries})
-    if unique_days < MIN_DIARY_THRESHOLD:
-        raise InsufficientDataError(
-            f"최소 {MIN_DIARY_THRESHOLD}일의 기록이 필요합니다 "
-            f"(현재: {unique_days}일)"
-        )
+def has_sufficient_data(diaries: list[Diary]) -> bool:
+    """이번 달 7일 이상 기록 여부 판정."""
+    unique_days = len({utc_to_kst(d.diary_date).date() for d in diaries})
+    return unique_days >= MIN_DIARY_THRESHOLD
 
 
 def _extract_dong(address_name: str) -> str | None:
@@ -260,13 +175,9 @@ def _extract_dong(address_name: str) -> str | None:
 
 
 def get_month_date_range(year: int, month: int) -> tuple[datetime, datetime]:
-    """주어진 년월의 시작일시와 종료일시를 반환 (KST 기준)"""
-    kst = timezone(timedelta(hours=9))
-    start_date = datetime(year, month, 1, tzinfo=kst)
-
-    if month == 12:
-        end_date = datetime(year + 1, 1, 1, tzinfo=kst)
-    else:
-        end_date = datetime(year, month + 1, 1, tzinfo=kst)
-
-    return start_date, end_date
+    """KST 기준 월 경계를 UTC datetime으로 변환하여 반환."""
+    start = kst_date_to_utc(date(year, month, 1))
+    end_year = year + 1 if month == 12 else year
+    end_month = 1 if month == 12 else month + 1
+    end = kst_date_to_utc(date(end_year, end_month, 1))
+    return start, end
