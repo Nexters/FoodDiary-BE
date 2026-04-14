@@ -30,9 +30,7 @@ aiofiles>=24.1.0
 
 # Development
 python-dotenv==1.0.1
-black==24.10.0
-isort==5.13.2
-ruff==0.8.6
+ruff==0.15.1
 
 # Testing
 pytest==8.3.4

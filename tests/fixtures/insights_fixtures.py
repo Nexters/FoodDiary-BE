@@ -26,7 +26,7 @@ def create_current_month_diaries(
                 "time_type": time_types[i % len(time_types)],
                 "category": categories[i % len(categories)],
                 "photo_count": base_photo_count + i,
-                "note": f"테스트 노트 {i+1}",
+                "note": f"테스트 노트 {i + 1}",
             }
         )
 
@@ -65,7 +65,7 @@ def create_previous_month_diaries(
                 "time_type": time_types[i % len(time_types)],
                 "category": categories[i % len(categories)],
                 "photo_count": base_photo_count + i,
-                "note": f"저번 달 노트 {i+1}",
+                "note": f"저번 달 노트 {i + 1}",
             }
         )
 

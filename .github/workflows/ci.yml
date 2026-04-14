@@ -46,18 +46,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 6. 코드 포맷팅 검사 (black)
-      - name: Check code formatting with black
-        run: black --check .
-
-      # 7. import 정렬 검사 (isort)
-      - name: Check import sorting with isort
-        run: isort --check-only .
-
-      # 8. 린팅 검사 (ruff)
+      # 6. 린트 검사 (Ruff — import 정렬 포함)
       - name: Lint with ruff
         run: ruff check .
 
-      # 9. 타입 체크 및 테스트 실행 (pytest)
+      # 7. 포맷팅 검사 (Ruff)
+      - name: Check code formatting with ruff
+        run: ruff format --check .
+
+      # 8. 테스트 실행 (pytest)
       - name: Run tests with pytest
         run: pytest

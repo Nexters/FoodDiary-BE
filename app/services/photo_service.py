@@ -32,7 +32,7 @@ async def delete_photo_files(image_urls: list[str]) -> None:
     """사진 파일을 실제 스토리지에서 삭제합니다."""
     for image_url in image_urls:
         path = Path(image_url)
-        if path.exists():
+        if await asyncio.to_thread(path.exists):
             await asyncio.to_thread(path.unlink)
 
 

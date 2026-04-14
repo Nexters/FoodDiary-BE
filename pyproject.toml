@@ -4,31 +4,21 @@ version = "0.1.0"
 description = "음식 사진 기반 기록 서비스 Backend API"
 requires-python = ">=3.12"
 
-[tool.black]
-line-length = 88
-target-version = ["py312"]
-exclude = '''
-/(
-    \.git
-    | \.venv
-    | __pycache__
-)/
-'''
-
-[tool.isort]
-profile = "black"
-line_length = 88
-skip = [".venv", "__pycache__"]
-
 [tool.ruff]
 target-version = "py312"
 line-length = 88
-exclude = [".venv", "__pycache__"]
+exclude = [".venv", "__pycache__", "*.md"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "N", "ASYNC", "Q", "RUF"]
+# E/W: pycodestyle, F: pyflakes, I: isort, B: bugbear, UP: pyupgrade,
+# N: pep8-naming, SIM: simplify, ASYNC: async checks, Q: quotes, RUF: ruff-specific
+select = ["E", "W", "F", "I", "B", "UP", "N", "SIM", "ASYNC", "Q", "RUF"]
 ignore = ["B008"]  # FastAPI Depends() in argument defaults is the recommended pattern
 fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+# 테스트에서는 blocking pathlib 사용을 허용 (async 테스트 편의상)
+"tests/**" = ["ASYNC240"]
 
 [tool.ruff.format]
 quote-style = "double"
