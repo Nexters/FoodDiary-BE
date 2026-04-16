@@ -11,7 +11,7 @@ import pytest
 from app.models.diary import Diary, DiaryAnalysis
 from app.models.user import User
 from app.schemas.restaurant import RestaurantSearchResponse
-from app.services.restaurant_service import search_restaurants
+from app.usecases.restaurant import search_restaurants
 from tests.fixtures.auth_fixtures import create_test_user_data
 
 KAKAO_API_KEY_SET = bool(os.getenv("KAKAO_REST_API_KEY"))
