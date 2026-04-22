@@ -2,8 +2,8 @@
 
 ## 자동 적용
 
-- **VSCode 저장 시** 자동 포맷팅 (Ruff + Black)
-- import 순서도 자동 정렬
+- **VSCode 저장 시** 자동 포맷팅 + import 정렬 + lint 자동 수정 (Ruff)
+- 포맷터 / 린터 / import 정렬 모두 **Ruff 하나**로 통합 (Black, isort 미사용)
 
 ## 지켜야 할 것
 
@@ -33,6 +33,7 @@ def create_diary(user_id, photo_url, location=None):
 ## 수동 검사 (필요시)
 
 ```bash
-ruff check app/       # 린트 검사
-ruff check app/ --fix # 자동 수정
+ruff check app/        # 린트 검사
+ruff check app/ --fix  # 린트 자동 수정 (import 정렬 포함)
+ruff format app/       # 포맷팅
 ```

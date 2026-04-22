@@ -1,10 +1,10 @@
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class OAuthProvider(str, Enum):
+class OAuthProvider(StrEnum):
     """지원하는 OAuth provider"""
 
     APPLE = "apple"

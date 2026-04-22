@@ -69,8 +69,7 @@ async def batch_upload_photos_endpoint(
         bool,
         Query(
             description=(
-                "테스트 모드: LLM 분석을 mock 데이터로 대체하고 "
-                "FCM silent push도 전송"
+                "테스트 모드: LLM 분석을 mock 데이터로 대체하고 FCM silent push도 전송"
             )
         ),
     ] = False,
