@@ -1,12 +1,9 @@
 """사진 업로드 테스트용 fixture 함수들"""
 
 import io
-from datetime import UTC, datetime
 
 from fastapi import UploadFile
 from PIL import Image
-
-from app.services.analysis_service import AnalysisData
 
 
 def create_test_image_bytes() -> bytes:
@@ -31,33 +28,15 @@ def create_test_upload_file(
 
 
 def mock_exif_data(
-    taken_at: datetime | None = None,
+    taken_at=None,
     latitude: float | None = None,
     longitude: float | None = None,
 ) -> dict:
     """고정 ExifData 반환"""
+    from datetime import UTC, datetime
+
     return {
         "taken_at": taken_at or datetime(2026, 1, 15, 3, 30, 0, tzinfo=UTC),
         "latitude": latitude,
         "longitude": longitude,
     }
-
-
-def mock_analysis_data(photo_id: int) -> AnalysisData:
-    """고정 AnalysisData 반환"""
-    return AnalysisData(
-        photo_id=photo_id,
-        food_category="한식",
-        restaurant_candidates=[
-            {
-                "name": "테스트식당",
-                "confidence": 0.9,
-                "address": "서울시 중구",
-                "url": "https://place.map.kakao.com/12345",
-                "road_address": "서울시 중구 테스트로 1",
-            }
-        ],
-        menu_candidates=[{"name": "칼국수"}],
-        keywords=["얼큰한", "구수한"],
-        raw_response="{'food_category': '한식'}",
-    )

@@ -1,8 +1,23 @@
-from sqlalchemy import func
+import uuid
+
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.device import Device
+
+
+async def get_device_id_for_user(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+) -> str | None:
+    result = await session.execute(
+        select(Device.device_id)
+        .where(Device.user_id == user_id, Device.deleted_at.is_(None))
+        .order_by(Device.updated_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 async def upsert_device(session: AsyncSession, device: Device) -> Device:
