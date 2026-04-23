@@ -5,10 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session
+from app.core.database import get_session_v2 as get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.restaurant import RestaurantSearchResponse
-from app.services.restaurant_service import search_restaurants
+from app.usecases import restaurant as restaurant_usecase
 
 router = APIRouter(prefix="/restaurant", tags=["Restaurant"])
 
@@ -23,7 +23,7 @@ async def search_restaurant(
     session: AsyncSession = Depends(get_session),
 ) -> RestaurantSearchResponse:
     """음식점 검색"""
-    return await search_restaurants(
+    return await restaurant_usecase.search_restaurants(
         session=session,
         user_id=user_id,
         diary_id=diary_id,

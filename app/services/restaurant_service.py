@@ -1,55 +1,12 @@
 """음식점 검색 서비스"""
 
-from uuid import UUID
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.diary import Diary, DiaryAnalysis
+from app.models.diary import DiaryAnalysis
 from app.schemas.restaurant import RestaurantItem, RestaurantSearchResponse
 from app.services.kakao_map_service import search_restaurants_by_keyword
 
 
-async def search_restaurants(
-    session: AsyncSession,
-    user_id: UUID,
-    diary_id: int | None = None,
-    keyword: str | None = None,
-    page: int = 1,
-    size: int = 15,
-) -> RestaurantSearchResponse:
-    """음식점 검색 오케스트레이션"""
-    if keyword:
-        return await _search_by_keyword(keyword, page, size)
-
-    if diary_id:
-        restaurants = await get_diary_restaurants(session, user_id, diary_id)
-        return RestaurantSearchResponse(
-            restaurants=restaurants,
-            total_count=len(restaurants),
-            page=1,
-            size=len(restaurants),
-            is_end=True,
-        )
-
-    return RestaurantSearchResponse(
-        restaurants=[], total_count=0, page=page, size=size, is_end=True
-    )
-
-
-async def get_diary_restaurants(
-    session: AsyncSession,
-    user_id: UUID,
-    diary_id: int,
-) -> list[RestaurantItem]:
-    """diary_analysis에서 음식점 후보 리스트 반환 (페이지네이션 없음)"""
-    stmt = (
-        select(DiaryAnalysis)
-        .join(Diary, DiaryAnalysis.diary_id == Diary.id)
-        .where(Diary.id == diary_id, Diary.user_id == user_id)
-    )
-    analysis = (await session.execute(stmt)).scalar_one_or_none()
-
+def parse_diary_analysis(analysis: DiaryAnalysis | None) -> list[RestaurantItem]:
+    """DiaryAnalysis JSONB 결과를 RestaurantItem 목록으로 변환"""
     if not analysis:
         return []
 
@@ -69,7 +26,7 @@ async def get_diary_restaurants(
     ]
 
 
-async def _search_by_keyword(
+async def search_by_keyword(
     keyword: str,
     page: int,
     size: int,

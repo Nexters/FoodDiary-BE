@@ -26,8 +26,9 @@ from app.schemas.diary import (
     PhotoEntry,
 )
 from app.schemas.restaurant import RestaurantListResponse
-from app.services import diary_service, llm_service, restaurant_service
+from app.services import diary_service, llm_service
 from app.usecases import diary as diary_usecase
+from app.usecases import restaurant as restaurant_usecase
 from app.usecases.diary import (
     DateRangeInvalidError,
     DateRangeTooLongError,
@@ -56,7 +57,7 @@ async def get_diaries_by_date_range(
     test_mode: Annotated[
         bool, Query(description="테스트 모드 (mock 데이터 반환)")
     ] = False,
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_session_v2),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -133,7 +134,7 @@ async def get_diaries_summary_by_date_range(
     test_mode: Annotated[
         bool, Query(description="테스트 모드 (mock 데이터 반환)")
     ] = False,
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_session_v2),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -189,7 +190,7 @@ async def get_diary_by_id(
     test_mode: Annotated[
         bool, Query(description="테스트 모드 (mock 데이터 반환)")
     ] = False,
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_session_v2),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -216,7 +217,7 @@ async def get_diary_by_id(
 @router.get("/{diary_id}/suggestions", response_model=RestaurantListResponse)
 async def get_diary_suggestions(
     diary_id: int,
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_session_v2),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -225,7 +226,7 @@ async def get_diary_suggestions(
     "이 식당을 찾고 계신가요?" 화면에서 사용
     DiaryAnalysis.result의 각 후보를 restaurant 단위로 반환
     """
-    restaurants = await restaurant_service.get_diary_restaurants(
+    restaurants = await restaurant_usecase.get_diary_restaurants(
         session=db, user_id=user_id, diary_id=diary_id
     )
     return RestaurantListResponse(restaurants=restaurants)
