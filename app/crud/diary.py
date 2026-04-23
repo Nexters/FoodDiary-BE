@@ -1,12 +1,75 @@
+import logging
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Diary, Photo
+from app.models import Diary, DiaryAnalysis, Photo
 from app.utils.timezone import kst_date_to_utc
+
+logger = logging.getLogger(__name__)
+
+
+async def get_or_create_diary(
+    session: AsyncSession,
+    user_id: UUID,
+    diary_date: date,
+    time_type: str,
+) -> tuple[Diary, bool]:
+    diary_datetime = kst_date_to_utc(diary_date)
+    stmt = select(Diary).where(
+        Diary.user_id == user_id,
+        Diary.diary_date == diary_datetime,
+        Diary.time_type == time_type,
+        Diary.deleted_at.is_(None),
+    )
+    result = await session.execute(stmt)
+    diary = result.scalar_one_or_none()
+    if diary is None:
+        diary = Diary(
+            user_id=user_id,
+            diary_date=diary_datetime,
+            time_type=time_type,
+            photo_count=0,
+        )
+        session.add(diary)
+        await session.flush()
+        return diary, True
+    return diary, False
+
+
+async def save_diary_analysis(
+    session: AsyncSession,
+    diary_id: int,
+    result: list,
+) -> None:
+    existing = await session.get(DiaryAnalysis, diary_id)
+    if existing:
+        existing.result = result
+    else:
+        session.add(DiaryAnalysis(diary_id=diary_id, result=result))
+    diary = await session.get(Diary, diary_id)
+    if diary and result:
+        diary.tags = result[0].get("tags", [])
+
+
+async def get_stale_processing_diaries(
+    session: AsyncSession,
+    stale_before: datetime,
+) -> list[Diary]:
+    stmt = (
+        select(Diary)
+        .where(
+            Diary.analysis_status == "processing",
+            Diary.created_at < stale_before,
+            Diary.deleted_at.is_(None),
+        )
+        .order_by(Diary.created_at)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def get_diary(
@@ -110,3 +173,45 @@ async def delete_photos(
 async def delete_diary(session: AsyncSession, diary: Diary) -> None:
     diary.deleted_at = datetime.now(UTC)
     await session.flush()
+
+
+async def mark_diaries_done(session: AsyncSession, diary_ids: list[int]) -> None:
+    await session.execute(
+        update(Diary)
+        .where(Diary.id.in_(diary_ids), Diary.analysis_status == "processing")
+        .values(analysis_status="done")
+    )
+
+
+async def mark_diaries_failed(session: AsyncSession, diary_ids: list[int]) -> None:
+    await session.execute(
+        update(Diary).where(Diary.id.in_(diary_ids)).values(analysis_status="failed")
+    )
+
+
+async def apply_top_restaurant(
+    session: AsyncSession,
+    diary_id: int,
+    restaurant_name: str | None,
+    restaurant_url: str | None,
+    road_address: str | None,
+    category: str | None,
+    note: str | None,
+) -> None:
+    diary = await session.get(Diary, diary_id)
+    if not diary:
+        return
+
+    diary.restaurant_name = restaurant_name
+    diary.restaurant_url = restaurant_url
+    diary.road_address = road_address
+    diary.category = category
+    if note:
+        diary.note = note
+
+    row = await session.execute(
+        select(Photo.id).where(Photo.diary_id == diary_id).order_by(Photo.id).limit(1)
+    )
+    first_photo_id = row.scalar_one_or_none()
+    if first_photo_id:
+        diary.cover_photo_id = first_photo_id
