@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session_v2 as get_session
+from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.insights import (
     CategoryCounts,

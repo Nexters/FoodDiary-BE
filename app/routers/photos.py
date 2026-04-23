@@ -19,7 +19,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session_v2
+from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.photo import BatchUploadResponse, DiaryUploadResult
 from app.usecases.photos import batch_upload_photos
@@ -73,7 +73,7 @@ async def batch_upload_photos_endpoint(
             )
         ),
     ] = False,
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ) -> BatchUploadResponse:
     """
