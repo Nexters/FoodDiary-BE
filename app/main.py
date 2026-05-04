@@ -1,13 +1,12 @@
-import asyncio
 import logging
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import create_tables
-from app.core.scheduler import start_scheduler
+from app.core.schedulers import start_all_schedulers, stop_all_schedulers
 from app.routers import (
     auth_router,
     device_router,
@@ -32,11 +31,9 @@ async def lifespan(app: FastAPI):
     """애플리케이션 시작 시 초기화"""
     await create_tables()
     initialize_firebase()
-    scheduler_task = start_scheduler()
+    scheduler_tasks = start_all_schedulers()
     yield
-    scheduler_task.cancel()
-    with suppress(asyncio.CancelledError):
-        await scheduler_task
+    await stop_all_schedulers(scheduler_tasks)
 
 
 app = FastAPI(
