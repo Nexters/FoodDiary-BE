@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import create_tables
+from app.core.schedulers import start_all_schedulers, stop_all_schedulers
 from app.routers import (
     auth_router,
     device_router,
@@ -30,7 +31,9 @@ async def lifespan(app: FastAPI):
     """애플리케이션 시작 시 초기화"""
     await create_tables()
     initialize_firebase()
+    scheduler_tasks = start_all_schedulers()
     yield
+    await stop_all_schedulers(scheduler_tasks)
 
 
 app = FastAPI(

@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, desc, text
@@ -11,6 +12,23 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.photo import Photo
     from app.models.user import User
+
+
+class DiaryCategory(StrEnum):
+    KOREAN = "korean"
+    CHINESE = "chinese"
+    JAPANESE = "japanese"
+    WESTERN = "western"
+    ETC = "etc"
+    HOME_COOKED = "home_cooked"
+
+    @classmethod
+    def from_str(cls, value: str | None) -> "DiaryCategory | None":
+        """유효하지 않은 값은 None으로 정규화."""
+        try:
+            return cls(value)
+        except (ValueError, KeyError):
+            return None
 
 
 class Diary(Base):
@@ -34,8 +52,9 @@ class Diary(Base):
     address_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     analysis_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="processing"
-    )  # processing | done | failed (새로 생성 = 분석 전)
+        String(20), nullable=False, default="pending"
+    )  # pending | processing | done | failed
+    send_cnt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cover_photo_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("photos.id", ondelete="SET NULL"), nullable=True
     )
