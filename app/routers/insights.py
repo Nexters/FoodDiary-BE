@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
+from app.models.diary import DiaryCategory
 from app.schemas.insights import (
     CategoryCounts,
     CategoryInfo,
@@ -64,7 +65,7 @@ async def get_user_insights(
 
 
 def _get_mock_insights() -> InsightsResponse:
-    categories = ["korean", "chinese", "japanese", "western", "etc", "home_cooked"]
+    categories = list(DiaryCategory)
     all_dongs = [
         "연남동",
         "역삼동",
