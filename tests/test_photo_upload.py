@@ -7,8 +7,8 @@ from sqlalchemy import select
 
 from app.models import Diary, Photo
 from app.models.user import User
+from app.usecases.diary import _extract_top_restaurant
 from app.usecases.photos import _batch_upload_photos_sync as batch_upload_photos_sync
-from app.usecases.photos import _extract_top_restaurant
 from tests.fixtures.auth_fixtures import create_test_user_data
 from tests.fixtures.photo_fixtures import create_test_upload_file, mock_exif_data
 

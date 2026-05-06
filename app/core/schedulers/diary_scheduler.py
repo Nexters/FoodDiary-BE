@@ -31,9 +31,9 @@ async def _scheduler_loop() -> None:
                 logger.debug("[DiaryScheduler] 분산 락 획득 실패, tick 건너뜀")
                 continue
             try:
-                # pending 먼저 처리 후 stale 복구 — 이번 tick에서 바로 재시도 가능하도록
-                await run_handle_pending_diaries()
+                # stale 복구 후 pending 처리 — 복구된 diary를 같은 tick에서 재시도
                 await run_expire_stale_diaries()
+                await run_handle_pending_diaries()
             except Exception:
                 logger.exception("[DiaryScheduler] tick 처리 중 예외 발생")
             finally:
