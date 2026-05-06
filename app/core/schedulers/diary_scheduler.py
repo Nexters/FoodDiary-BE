@@ -22,25 +22,22 @@ def start_diary_scheduler() -> asyncio.Task:
 
 
 async def _scheduler_loop() -> None:
-    logger.info(
-        "Diary scheduler started (interval=%ds)",
-        _INTERVAL_SECONDS,
-    )
+    logger.info("[DiaryScheduler] 시작 (interval=%ds)", _INTERVAL_SECONDS)
     while True:
         await asyncio.sleep(_INTERVAL_SECONDS)
         async with AsyncSessionLocal() as db:
             acquired = await _try_acquire_lock(db)
             if not acquired:
-                logger.debug("Scheduler lock not acquired, skipping this tick")
+                logger.debug("[DiaryScheduler] 분산 락 획득 실패, tick 건너뜀")
                 continue
             try:
-                await run_expire_stale_diaries()
+                # pending 먼저 처리 후 stale 복구 — 이번 tick에서 바로 재시도 가능하도록
                 await run_handle_pending_diaries()
+                await run_expire_stale_diaries()
             except Exception:
-                logger.exception("Scheduler error during diary scheduler jobs")
+                logger.exception("[DiaryScheduler] tick 처리 중 예외 발생")
             finally:
                 await _release_lock(db)
-
 
 
 async def _try_acquire_lock(db_conn) -> bool:
