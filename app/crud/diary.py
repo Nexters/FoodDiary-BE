@@ -63,10 +63,19 @@ async def get_stale_processing_diaries(
         select(Diary)
         .where(
             Diary.analysis_status == "processing",
-            Diary.created_at < stale_before,
+            Diary.updated_at < stale_before,
             Diary.deleted_at.is_(None),
         )
-        .order_by(Diary.created_at)
+        .order_by(Diary.updated_at)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_pending_diaries(session: AsyncSession) -> list[Diary]:
+    stmt = select(Diary).where(
+        Diary.analysis_status == "pending",
+        Diary.deleted_at.is_(None),
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
@@ -187,6 +196,44 @@ async def mark_diaries_failed(session: AsyncSession, diary_ids: list[int]) -> No
     await session.execute(
         update(Diary).where(Diary.id.in_(diary_ids)).values(analysis_status="failed")
     )
+
+
+async def mark_diaries_pending(session: AsyncSession, diary_ids: list[int]) -> None:
+    await session.execute(
+        update(Diary).where(Diary.id.in_(diary_ids)).values(analysis_status="pending")
+    )
+
+
+async def expire_stale_processing_diaries(
+    session: AsyncSession,
+    stale_before: datetime,
+) -> int:
+    result = await session.execute(
+        update(Diary)
+        .where(
+            Diary.analysis_status == "processing",
+            Diary.updated_at < stale_before,
+            Diary.deleted_at.is_(None),
+        )
+        .values(analysis_status="pending")
+        .returning(Diary.id)
+    )
+    return len(result.scalars().all())
+
+
+async def claim_diary_for_processing(session: AsyncSession, diary_id: int) -> bool:
+    """pending → processing 원자적 전환 + send_cnt 증가.
+
+    다른 프로세스가 이미 클레임한 경우 False 반환.
+    """
+    result = await session.execute(
+        update(Diary)
+        .where(Diary.id == diary_id, Diary.analysis_status == "pending")
+        .values(analysis_status="processing", send_cnt=Diary.send_cnt + 1)
+        .returning(Diary.id)
+    )
+    await session.commit()
+    return result.scalar_one_or_none() is not None
 
 
 async def apply_top_restaurant(
