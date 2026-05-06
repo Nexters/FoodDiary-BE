@@ -38,7 +38,6 @@ from app.utils.timezone import utc_to_kst_naive
 logger = logging.getLogger(__name__)
 
 
-
 @dataclass
 class AnalysisData:
     diary_id: int
