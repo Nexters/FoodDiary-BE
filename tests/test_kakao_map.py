@@ -13,7 +13,7 @@ async def test_search_nearby_restaurants():
     """
     실제 Kakao API로 주변 음식점 검색:
     - 서울 시청 좌표로 검색
-    - name, address, road_address, kakao_id 필드 존재 확인
+    - name, address_name, road_address, kakao_id 필드 존재 확인
     - API 키가 없거나 placeholder면 SKIP
     """
     if settings.KAKAO_REST_API_KEY in PLACEHOLDER_VALUES:
@@ -30,7 +30,7 @@ async def test_search_nearby_restaurants():
     assert len(results) > 0
     first = results[0]
     assert "name" in first
-    assert "address" in first
+    assert "address_name" in first
     assert "road_address" in first
     assert "kakao_id" in first
 

@@ -242,6 +242,7 @@ async def apply_top_restaurant(
     restaurant_name: str | None,
     restaurant_url: str | None,
     road_address: str | None,
+    address_name: str | None,
     category: str | None,
     note: str | None,
 ) -> None:
@@ -252,6 +253,7 @@ async def apply_top_restaurant(
     diary.restaurant_name = restaurant_name
     diary.restaurant_url = restaurant_url
     diary.road_address = road_address
+    diary.address_name = address_name
     diary.category = category
     if note:
         diary.note = note

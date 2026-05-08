@@ -125,6 +125,7 @@ def _extract_top_restaurant(result: list[dict]) -> dict | None:
         "restaurant_name": top.get("restaurant_name"),
         "restaurant_url": top.get("restaurant_url"),
         "road_address": top.get("road_address"),
+        "address_name": top.get("address_name"),
         "category": DiaryCategory.from_str(top.get("category")),
         "note": top.get("memo") or None,
     }

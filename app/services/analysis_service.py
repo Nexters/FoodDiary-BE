@@ -32,10 +32,12 @@ async def _analyze_photos_internal(photos: list[Photo]) -> list[dict]:
     taken_location = next((p.taken_location for p in photos if p.taken_location), None)
 
     restaurant_candidates = []
+    address_map: dict[str, str] = {}
     if taken_location:
         try:
             lat, lng = map(float, taken_location.split(","))
             nearby = await search_nearby_restaurants(lat, lng)
+            address_map = {r["name"]: r.get("address_name", "") for r in nearby}
             restaurant_candidates = [
                 {
                     "name": r["name"],
@@ -52,4 +54,9 @@ async def _analyze_photos_internal(photos: list[Photo]) -> list[dict]:
         except Exception as e:
             logger.warning("GPS 파싱 또는 식당 검색 실패: %s", e)
 
-    return await analyze_food_images(image_paths, restaurant_candidates)
+    result = await analyze_food_images(image_paths, restaurant_candidates)
+    for item in result:
+        name = item.get("restaurant_name")
+        if name and name in address_map:
+            item["address_name"] = address_map[name]
+    return result
