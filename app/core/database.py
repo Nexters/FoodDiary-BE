@@ -28,19 +28,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """
-    비동기 데이터베이스 세션을 생성하고 반환하는 의존성 함수
-    FastAPI의 Depends에서 사용
-    """
-    async with AsyncSessionLocal() as session:
-        yield session
-
-
-async def get_session_v2() -> AsyncGenerator[AsyncSession, None]:
-    """
-    트랜잭션을 자동 관리하는 세션 의존성 함수 (리팩토링된 usecase 전용)
-    session.begin()으로 트랜잭션을 시작하고, 완료 시 자동 commit/rollback
-    """
+    """트랜잭션을 자동 관리하는 세션 의존성 함수. 완료 시 자동 commit/rollback."""
     async with AsyncSessionLocal() as session, session.begin():
         yield session
 

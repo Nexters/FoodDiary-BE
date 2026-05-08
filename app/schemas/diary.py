@@ -4,15 +4,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.diary import DiaryCategory
+
 # ======================
 # Enum & Base Models
 # ======================
 
 TimeType = Literal["breakfast", "lunch", "dinner", "snack"]
 AnalysisStatus = Literal["pending", "processing", "done", "failed"]
-DiaryCategory = Literal[
-    "korean", "chinese", "japanese", "western", "etc", "home_cooked"
-]
 
 
 class DiaryBase(BaseModel):

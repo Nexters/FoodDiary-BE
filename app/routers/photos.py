@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.schemas.photo import BatchUploadResponse, DiaryUploadResult
-from app.services.photo_service import analyze_and_notify, batch_upload_photos_sync
+from app.usecases.photos import batch_upload_photos
 
 logger = logging.getLogger(__name__)
 
@@ -113,42 +113,16 @@ async def batch_upload_photos_endpoint(
 
     target_date = _parse_date(date)
     _validate_photos(photos)
-
     file_buffers = await _read_files_to_memory(photos)
 
-    sync_results = await batch_upload_photos_sync(
-        db, user_id, target_date, file_buffers
-    )
-
-    if not sync_results:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="모든 파일 처리에 실패했습니다.",
-        )
-
-    diary_ids = list(dict.fromkeys(r.diary_id for r in sync_results if r.is_new_diary))
-    background_tasks.add_task(
-        analyze_and_notify,
-        diary_ids=diary_ids,
-        device_id=device_id,
+    return await batch_upload_photos(
+        db=db,
+        user_id=user_id,
         target_date=target_date,
+        device_id=device_id,
+        file_buffers=file_buffers,
+        background_tasks=background_tasks,
     )
-
-    seen: dict[int, tuple[str, str]] = {}
-    for r in sync_results:
-        if r.diary_id not in seen:
-            seen[r.diary_id] = (r.analysis_status, r.time_type)
-
-    diaries = [
-        DiaryUploadResult(
-            diary_id=diary_id,
-            diary_status=status,
-            time_type=time_type,
-        )
-        for diary_id, (status, time_type) in seen.items()
-    ]
-
-    return BatchUploadResponse(diary_date=str(target_date), diaries=diaries)
 
 
 # ========================================
@@ -228,10 +202,10 @@ async def _get_mock_batch_upload_response(
     diaries = [
         DiaryUploadResult(
             diary_id=diary_id,
-            diary_status=status,
+            diary_status=diary_status,
             time_type=time_type,
         )
-        for diary_id, (status, time_type) in seen.items()
+        for diary_id, (diary_status, time_type) in seen.items()
     ]
 
     background_tasks.add_task(

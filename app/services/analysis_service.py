@@ -1,14 +1,8 @@
-"""분석 서비스 레이어"""
+"""분석 서비스 레이어 — 외부 API 통신 (DB 접근 없음)"""
 
 import asyncio
 import logging
-from dataclasses import dataclass
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models import DiaryAnalysis
-from app.models.diary import Diary
 from app.models.photo import Photo
 from app.services.kakao_map_service import search_nearby_restaurants
 from app.services.llm_service import analyze_food_images
@@ -16,82 +10,27 @@ from app.services.llm_service import analyze_food_images
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class AnalysisData:
-    """분석 결과 데이터 (DB 저장 전)"""
-
-    diary_id: int
-    result: list
-
-
-async def analyze_grouped_photo_data(
-    db: AsyncSession,
-    diary_id: int,
-) -> AnalysisData | None:
-    """
-    같은 시간대 사진들을 한 번의 LLM 호출로 분석합니다.
-
-    Args:
-        db: 데이터베이스 세션
-        diary_id: 다이어리 ID
-
-    Returns:
-        AnalysisData 또는 None (실패/타임아웃 시)
-    """
+async def analyze_diary_photos(
+    photos: list[Photo],
+) -> list[dict]:
+    """사진 목록을 받아 LLM 분석 결과를 반환합니다."""
     try:
         return await asyncio.wait_for(
-            _analyze_grouped_photo_data_internal(db, diary_id),
+            _analyze_photos_internal(photos),
             timeout=30,
         )
     except TimeoutError:
-        logger.warning(f"그룹 사진 분석 타임아웃: diary_id={diary_id}")
-        return None
+        logger.warning("사진 분석 타임아웃")
+        return []
     except Exception as e:
-        logger.warning(f"그룹 사진 분석 실패: diary_id={diary_id}, error={e}")
-        return None
+        logger.warning("사진 분석 실패: %s", e)
+        return []
 
 
-async def aggregate_photo_analysis_to_diary(
-    db: AsyncSession, data: AnalysisData
-) -> None:
-    """
-    분석 결과를 DiaryAnalysis 테이블에 저장합니다 (upsert).
-
-    Args:
-        db: 데이터베이스 세션
-        data: 분석 결과
-    """
-    existing = await db.get(DiaryAnalysis, data.diary_id)
-
-    if existing:
-        existing.result = data.result
-    else:
-        db.add(
-            DiaryAnalysis(
-                diary_id=data.diary_id,
-                result=data.result,
-            )
-        )
-
-    diary = await db.get(Diary, data.diary_id)
-    if diary and data.result:
-        diary.tags = data.result[0].get("tags", [])
-
-    await db.commit()
-
-
-async def _analyze_grouped_photo_data_internal(
-    db: AsyncSession,
-    diary_id: int,
-) -> AnalysisData:
-    """그룹 사진 분석 내부 로직."""
-    rows = await db.execute(select(Photo).where(Photo.diary_id == diary_id))
-    photos = rows.scalars().all()
-
+async def _analyze_photos_internal(photos: list[Photo]) -> list[dict]:
     image_paths = [p.image_url for p in photos]
     taken_location = next((p.taken_location for p in photos if p.taken_location), None)
 
-    # GPS가 있으면 Kakao Map 검색
     restaurant_candidates = []
     if taken_location:
         try:
@@ -111,12 +50,6 @@ async def _analyze_grouped_photo_data_internal(
                 for r in nearby
             ]
         except Exception as e:
-            logger.warning(f"GPS 파싱 또는 식당 검색 실패: {e}")
+            logger.warning("GPS 파싱 또는 식당 검색 실패: %s", e)
 
-    # LLM 1회 호출 → 객체 배열 직접 반환
-    result = await analyze_food_images(image_paths, restaurant_candidates)
-
-    return AnalysisData(
-        diary_id=diary_id,
-        result=result,
-    )
+    return await analyze_food_images(image_paths, restaurant_candidates)

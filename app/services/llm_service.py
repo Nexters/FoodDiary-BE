@@ -12,6 +12,7 @@ from google.genai import types
 from PIL import Image
 
 from app.core.config import settings
+from app.models.diary import DiaryCategory
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ async def analyze_food_images(
                 types.Part.from_bytes(data=resized, mime_type="image/jpeg")
             )
 
-        _cats = "korean,chinese,japanese,western,etc,home_cooked"
+        _cats = ",".join(DiaryCategory)
 
         if restaurant_candidates:
             restaurant_list = "\n".join(

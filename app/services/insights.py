@@ -1,7 +1,7 @@
 from collections import Counter
 from datetime import date, datetime
 
-from app.models.diary import Diary
+from app.models.diary import Diary, DiaryCategory
 from app.schemas.insights import (
     CategoryCounts,
     CategoryInfo,
@@ -18,7 +18,6 @@ from app.utils.timezone import kst_date_to_utc, utc_to_kst
 
 MIN_DIARY_THRESHOLD = 7
 
-_ALL_CATEGORIES = ("korean", "chinese", "japanese", "western", "etc", "home_cooked")
 _DONG_LEVEL_SUFFIXES = ("동", "리", "가", "로")
 
 
@@ -69,7 +68,7 @@ def calculate_category_stats(
         previous_info = CategoryInfo(top_category="데이터 없음", count=0)
 
     current_counts = CategoryCounts(
-        **{cat: current_counter.get(cat, 0) for cat in _ALL_CATEGORIES}
+        **{cat: current_counter.get(cat, 0) for cat in DiaryCategory}
     )
 
     return CategoryStats(

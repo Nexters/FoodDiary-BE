@@ -1,5 +1,7 @@
 import asyncio
-from datetime import date
+import logging
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -7,18 +9,266 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
 from app.crud import diary as crud_diary
 from app.crud import photo as crud_photo
+from app.crud.device import get_device_id_for_user
+from app.crud.diary import (
+    apply_top_restaurant,
+    claim_diary_for_processing,
+    mark_diaries_done,
+    mark_diaries_pending,
+    save_diary_analysis,
+)
+from app.crud.photo import get_photos_by_diary_id
 from app.models import Diary, Photo
+from app.models.diary import DiaryCategory
 from app.schemas.diary import DiaryUpdate, DiaryWithPhotos, PhotoInDiary
 from app.services import photo_service
+from app.services.analysis_service import analyze_diary_photos
 from app.services.diary_service import (
     MAX_PHOTOS_PER_DIARY,
     _build_tags,
     _merge_date_with_cover_taken_at,
 )
+from app.services.notification_service import send_silent_notification
 from app.utils.file_storage import save_user_photo
 from app.utils.timezone import utc_to_kst_naive
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AnalysisData:
+    diary_id: int
+    result: list
+
+
+async def analyze_and_notify(
+    diary_ids: list[int],
+    device_id: str | None,
+    target_date: date,
+    test_mode: bool = False,
+) -> None:
+    await asyncio.gather(
+        *[
+            _claim_and_analyze(diary_id, device_id, target_date, test_mode)
+            for diary_id in diary_ids
+        ],
+        return_exceptions=True,
+    )
+
+
+async def _claim_and_analyze(
+    diary_id: int,
+    device_id: str | None,
+    target_date: date,
+    test_mode: bool,
+) -> None:
+    async with AsyncSessionLocal() as db:
+        if not await claim_diary_for_processing(db, diary_id):
+            logger.debug("[Analysis] 클레임 실패, 건너뜀: diary_id=%d", diary_id)
+            return  # 다른 프로세스가 이미 클레임 — 중복 분석 방지
+    logger.info("[Analysis] 분석 시작: diary_id=%d", diary_id)
+    await _run_analysis_pipeline(diary_id, test_mode=test_mode)
+    async with AsyncSessionLocal() as db:
+        await send_silent_notification(
+            db=db,
+            device_id=device_id,
+            data={"type": "analysis_complete", "diary_date": str(target_date)},
+        )
+
+
+async def _run_analysis_pipeline(diary_id: int, test_mode: bool = False) -> None:
+    try:
+        data = await _analyze_diary(diary_id, test_mode)
+        await _save_analysis_result(data)
+        logger.info("[Analysis] 완료 → done: diary_id=%d", diary_id)
+    except Exception:
+        logger.exception("[Analysis] 실패 → pending 복귀: diary_id=%d", diary_id)
+        async with AsyncSessionLocal() as db:
+            await mark_diaries_pending(db, [diary_id])
+            await db.commit()  # pending 복귀 — 스케줄러가 다음 tick에 재시도
+
+
+async def _analyze_diary(diary_id: int, test_mode: bool) -> AnalysisData:
+    if test_mode:
+        return _create_mock_analysis_data(diary_id)
+    return await _analyze_with_new_session(diary_id)
+
+
+async def _save_analysis_result(data: AnalysisData) -> None:
+    # 저장과 done 마크를 같은 트랜잭션으로 묶음 — 중간 실패 시 stale 복구가 재시도 가능
+    async with AsyncSessionLocal() as db:
+        await save_diary_analysis(db, data.diary_id, data.result)
+        top = _extract_top_restaurant(data.result)
+        if top:
+            await apply_top_restaurant(db, data.diary_id, **top)
+        await mark_diaries_done(db, [data.diary_id])
+        await db.commit()
+
+
+async def _analyze_with_new_session(diary_id: int) -> AnalysisData:
+    async with AsyncSessionLocal() as db:
+        photos = await get_photos_by_diary_id(db, diary_id)
+    result = await analyze_diary_photos(photos)
+    if not result:
+        raise ValueError(f"분석 결과 없음: diary_id={diary_id}")
+    return AnalysisData(diary_id=diary_id, result=result)
+
+
+def _extract_top_restaurant(result: list[dict]) -> dict | None:
+    if not result:
+        return None
+    top = result[0]
+    return {
+        "restaurant_name": top.get("restaurant_name"),
+        "restaurant_url": top.get("restaurant_url"),
+        "road_address": top.get("road_address"),
+        "category": DiaryCategory.from_str(top.get("category")),
+        "note": top.get("memo") or None,
+    }
+
+
+def _create_mock_analysis_data(diary_id: int) -> AnalysisData:
+    categories = ["한식", "일식", "중식", "양식", "카페"]
+    food_category = categories[diary_id % len(categories)]
+
+    restaurant_data = {
+        "한식": [
+            {
+                "name": "할머니집",
+                "confidence": 0.85,
+                "address": "서울시 강남구 테헤란로 123",
+            },
+            {
+                "name": "명동교자",
+                "confidence": 0.75,
+                "address": "서울시 중구 명동길 29",
+            },
+        ],
+        "일식": [
+            {
+                "name": "스시히로바",
+                "confidence": 0.90,
+                "address": "서울시 강남구 역삼동 456",
+            },
+            {
+                "name": "돈코츠라멘",
+                "confidence": 0.70,
+                "address": "서울시 서초구 서초대로 789",
+            },
+        ],
+        "중식": [
+            {
+                "name": "중화루",
+                "confidence": 0.80,
+                "address": "서울시 마포구 서교동 321",
+            },
+            {
+                "name": "차이나팩토리",
+                "confidence": 0.65,
+                "address": "서울시 용산구 이태원로 111",
+            },
+        ],
+        "양식": [
+            {
+                "name": "이탈리안키친",
+                "confidence": 0.88,
+                "address": "서울시 강남구 압구정로 222",
+            },
+            {
+                "name": "스테이크하우스",
+                "confidence": 0.72,
+                "address": "서울시 서초구 반포대로 333",
+            },
+        ],
+        "카페": [
+            {
+                "name": "스타벅스",
+                "confidence": 0.92,
+                "address": "서울시 강남구 선릉로 444",
+            },
+            {
+                "name": "투썸플레이스",
+                "confidence": 0.78,
+                "address": "서울시 송파구 올림픽로 555",
+            },
+        ],
+    }
+
+    tags_data = {
+        "한식": ["김치찌개", "된장찌개", "매운", "구수한", "국물"],
+        "일식": ["스시세트", "라멘", "신선한", "회", "담백한"],
+        "중식": ["짜장면", "짬뽕", "기름진", "볶음"],
+        "양식": ["파스타", "스테이크", "크림", "치즈"],
+        "카페": ["아메리카노", "카페라떼", "디저트", "달콤한"],
+    }
+
+    result = [
+        {
+            "restaurant_name": r["name"],
+            "restaurant_url": r.get("url", ""),
+            "road_address": r.get("address", ""),
+            "tags": tags_data[food_category],
+            "category": food_category,
+            "memo": f"[TEST MODE] {r['name']} 분석 결과",
+        }
+        for r in restaurant_data[food_category]
+    ]
+    return AnalysisData(diary_id=diary_id, result=result)
+
+
+_STALE_THRESHOLD_MINUTES = 5
+MAX_SEND_CNT = 3  # 1회 초기 시도 + 재시도 2회
+
+
+async def expire_stale_diaries() -> int:
+    stale_before = datetime.now(UTC) - timedelta(minutes=_STALE_THRESHOLD_MINUTES)
+    async with AsyncSessionLocal() as db:
+        count = await crud_diary.expire_stale_processing_diaries(db, stale_before)
+        await db.commit()
+    return count
+
+
+async def dispatch_pending_diary(diary_id: int) -> None:
+    """send_cnt가 한도 미만이면 분석 시작, 초과면 failed 처리."""
+    async with AsyncSessionLocal() as db:
+        diary = await crud_diary.get_diary(db, diary_id)
+        if diary is None:
+            return
+        if diary.send_cnt >= MAX_SEND_CNT:
+            logger.warning(
+                "[Analysis] send_cnt 한도 초과 → failed: diary_id=%d, send_cnt=%d/%d",
+                diary_id,
+                diary.send_cnt,
+                MAX_SEND_CNT,
+            )
+            await exhaust_failed_diary(db, diary_id)
+            return
+        device_id = await get_device_id_for_user(db, diary.user_id)
+    await analyze_and_notify(
+        diary_ids=[diary_id],
+        device_id=device_id,
+        target_date=diary.diary_date.date(),
+    )
+
+
+async def exhaust_failed_diary(session: AsyncSession, diary_id: int) -> None:
+    diary = await crud_diary.get_diary(session, diary_id)
+    if diary is None:
+        return
+    await crud_diary.mark_diaries_failed(session, [diary_id])
+    await session.commit()  # 알림 실패가 상태 변경을 롤백하지 않도록 먼저 확정
+    device_id = await get_device_id_for_user(session, diary.user_id)
+    await send_silent_notification(
+        db=session,
+        device_id=device_id,
+        data={
+            "type": "analysis_failed",
+            "diary_date": str(diary.diary_date.date()),
+        },
+    )
 
 
 class DiaryNotFoundError(Exception):

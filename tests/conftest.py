@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 from app.core.config import Settings  # noqa: E402
-from app.core.database import get_session, get_session_v2  # noqa: E402
+from app.core.database import get_session  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.fcm_sender import initialize_firebase  # noqa: E402
 from app.services.oauth2 import TokenVerificationError  # noqa: E402
@@ -140,7 +140,6 @@ async def test_client(test_db_session: AsyncSession, test_settings, monkeypatch)
         yield test_db_session
 
     app.dependency_overrides[get_session] = override_get_session
-    app.dependency_overrides[get_session_v2] = override_get_session
 
     # Create async client
     transport = ASGITransport(app=app)

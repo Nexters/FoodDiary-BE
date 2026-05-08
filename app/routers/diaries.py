@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session, get_session_v2
+from app.core.database import get_session
 from app.core.dependencies import get_current_user_id
 from app.routers.diaries_mock import (
     DATE_RANGE_RESPONSE_EXAMPLE,
@@ -57,7 +57,7 @@ async def get_diaries_by_date_range(
     test_mode: Annotated[
         bool, Query(description="테스트 모드 (mock 데이터 반환)")
     ] = False,
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -134,7 +134,7 @@ async def get_diaries_summary_by_date_range(
     test_mode: Annotated[
         bool, Query(description="테스트 모드 (mock 데이터 반환)")
     ] = False,
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -190,7 +190,7 @@ async def get_diary_by_id(
     test_mode: Annotated[
         bool, Query(description="테스트 모드 (mock 데이터 반환)")
     ] = False,
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -217,7 +217,7 @@ async def get_diary_by_id(
 @router.get("/{diary_id}/suggestions", response_model=RestaurantListResponse)
 async def get_diary_suggestions(
     diary_id: int,
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -280,7 +280,7 @@ async def get_diary_blog_text(
 async def update_diary(
     diary_id: int,
     body: DiaryUpdate,
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -310,7 +310,7 @@ async def update_diary(
 async def add_diary_photos(
     diary_id: int,
     photos: Annotated[list[UploadFile], File(description="추가할 이미지 파일들")],
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
@@ -353,7 +353,7 @@ async def add_diary_photos(
 @router.delete("/{diary_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_diary(
     diary_id: int,
-    db: AsyncSession = Depends(get_session_v2),
+    db: AsyncSession = Depends(get_session),
     user_id: UUID = Depends(get_current_user_id),
 ):
     """
