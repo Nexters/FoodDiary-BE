@@ -25,19 +25,22 @@ async def _scheduler_loop() -> None:
     logger.info("[DiaryScheduler] 시작 (interval=%ds)", _INTERVAL_SECONDS)
     while True:
         await asyncio.sleep(_INTERVAL_SECONDS)
-        async with AsyncSessionLocal() as db:
-            acquired = await _try_acquire_lock(db)
-            if not acquired:
-                logger.debug("[DiaryScheduler] 분산 락 획득 실패, tick 건너뜀")
-                continue
-            try:
-                # stale 복구 후 pending 처리 — 복구된 diary를 같은 tick에서 재시도
-                await run_expire_stale_diaries()
-                await run_handle_pending_diaries()
-            except Exception:
-                logger.exception("[DiaryScheduler] tick 처리 중 예외 발생")
-            finally:
-                await _release_lock(db)
+        try:
+            async with AsyncSessionLocal() as db:
+                acquired = await _try_acquire_lock(db)
+                if not acquired:
+                    logger.debug("[DiaryScheduler] 분산 락 획득 실패, tick 건너뜀")
+                    continue
+                try:
+                    # stale 복구 후 pending 처리 — 복구된 diary를 같은 tick에서 재시도
+                    await run_expire_stale_diaries()
+                    await run_handle_pending_diaries()
+                except Exception:
+                    logger.exception("[DiaryScheduler] tick 처리 중 예외 발생")
+                finally:
+                    await _release_lock(db)
+        except Exception:
+            logger.exception("[DiaryScheduler] DB 연결 실패, 다음 tick에 재시도")
 
 
 async def _try_acquire_lock(db_conn) -> bool:
