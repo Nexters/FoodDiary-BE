@@ -91,6 +91,14 @@
           {
             "matcher": { "id": "byName", "options": "p99 (튀는 구간)" },
             "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "최대 응답시간" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "dark-red", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [8, 4], "fill": "dash" } },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
           }
         ]
       },
@@ -100,7 +108,7 @@
         "legend": { "calcs": ["mean", "max", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "title": "응답시간 (p50 / p95 / p99)",
+      "title": "응답시간 (p50 / p95 / p99 / max)",
       "type": "timeseries",
       "targets": [
         {
@@ -120,6 +128,12 @@
           "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
           "legendFormat": "p99 (튀는 구간)",
           "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "histogram_quantile(1.0, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "최대 응답시간",
+          "refId": "D"
         }
       ]
     },
