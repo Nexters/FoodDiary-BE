@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 from contextlib import asynccontextmanager
 
@@ -65,11 +66,8 @@ app.include_router(users_router)
 
 Instrumentator(excluded_handlers=["/metrics", "/health"]).instrument(app)
 
-_METRICS_ALLOWED_IPS = {"127.0.0.1"}
-
-
 @app.get("/metrics", include_in_schema=False)
 async def metrics(request: Request) -> Response:
-    if request.client.host not in _METRICS_ALLOWED_IPS:
+    if not ipaddress.ip_address(request.client.host).is_private:
         raise HTTPException(status_code=403)
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
