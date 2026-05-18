@@ -61,4 +61,6 @@ app.include_router(photos_router)
 app.include_router(restaurant_router)
 app.include_router(users_router)
 
-Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+Instrumentator(excluded_handlers=["/metrics", "/health"]).instrument(app).expose(
+    app, endpoint="/metrics", include_in_schema=False
+)
