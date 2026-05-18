@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import settings
 from app.core.database import create_tables
@@ -59,3 +60,7 @@ app.include_router(insights_router)
 app.include_router(photos_router)
 app.include_router(restaurant_router)
 app.include_router(users_router)
+
+Instrumentator(excluded_handlers=["/metrics", "/health"]).instrument(app).expose(
+    app, endpoint="/metrics", include_in_schema=False
+)

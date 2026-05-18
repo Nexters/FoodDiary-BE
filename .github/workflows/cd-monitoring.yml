@@ -1,0 +1,46 @@
+name: Monitoring CD
+
+# docker/grafana, prometheus.yml 변경 시 또는 수동 실행
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docker/grafana/**"
+      - "docker/prometheus.yml"
+      - "docker/docker-compose.monitoring.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy-monitoring:
+    runs-on: ubuntu-22.04
+
+    steps:
+      # 1. 저장소 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 모니터링 설정 파일을 서버로 전송
+      - name: Copy monitoring config to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.API_SERVER_HOST }}
+          username: ${{ secrets.API_SERVER_USERNAME }}
+          key: ${{ secrets.API_SERVER_KEY }}
+          port: ${{ secrets.API_SERVER_PORT }}
+          source: "docker/docker-compose.monitoring.yml,docker/prometheus.yml,docker/grafana"
+          target: "/home/${{ secrets.API_SERVER_USERNAME }}"
+          strip_components: 0
+
+      # 3. SSH로 서버 접속 후 모니터링 스택 재시작
+      - name: Deploy monitoring stack
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.API_SERVER_HOST }}
+          username: ${{ secrets.API_SERVER_USERNAME }}
+          key: ${{ secrets.API_SERVER_KEY }}
+          port: ${{ secrets.API_SERVER_PORT }}
+          script: |
+            cd /home/${{ secrets.API_SERVER_USERNAME }}/docker
+            sudo docker compose -f docker-compose.monitoring.yml down || true
+            sudo docker compose -f docker-compose.monitoring.yml up -d
