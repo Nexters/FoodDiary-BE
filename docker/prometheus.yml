@@ -5,6 +5,5 @@ global:
 scrape_configs:
   - job_name: "fooddiary-api"
     static_configs:
-      - targets: ["host.docker.internal:8000"]
+      - targets: ["localhost:8000"]
     metrics_path: /metrics
-
