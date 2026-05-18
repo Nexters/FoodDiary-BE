@@ -1,0 +1,51 @@
+# ======================
+# FoodDiary Monitoring Stack
+# ======================
+# Prometheus + Grafana 모니터링 환경
+# 앱은 로컬에서 직접 실행 (host.docker.internal:8000)
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    container_name: fooddiary-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    networks:
+      - monitoring
+
+
+  grafana:
+    image: grafana/grafana:12.0.1
+    container_name: fooddiary-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  monitoring:
+    name: fooddiary-monitoring
+    driver: bridge
