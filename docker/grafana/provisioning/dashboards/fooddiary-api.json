@@ -50,7 +50,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(http_requests_total[1m]))",
+          "expr": "sum(rate(http_requests_total{handler!=\"unmatched-handler\"}[1m]))",
           "legendFormat": "전체 RPS",
           "refId": "A"
         }
@@ -178,7 +178,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(http_requests_total{status=~\"[45]..\"}[1m])) / sum(rate(http_requests_total[1m])) * 100",
+          "expr": "sum(rate(http_requests_total{handler!=\"unmatched-handler\", status=~\"[45]..\"}[1m])) / sum(rate(http_requests_total{handler!=\"unmatched-handler\"}[1m])) * 100",
           "legendFormat": "에러율 %",
           "refId": "A"
         }
@@ -222,13 +222,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[1m]))",
+          "expr": "sum(rate(http_requests_total{handler!=\"unmatched-handler\", status=~\"4..\"}[1m]))",
           "legendFormat": "4xx (클라이언트 에러)",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m]))",
+          "expr": "sum(rate(http_requests_total{handler!=\"unmatched-handler\", status=~\"5..\"}[1m]))",
           "legendFormat": "5xx (서버 에러)",
           "refId": "B"
         }
