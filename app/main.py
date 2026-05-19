@@ -64,7 +64,10 @@ app.include_router(photos_router)
 app.include_router(restaurant_router)
 app.include_router(users_router)
 
-Instrumentator(excluded_handlers=["/metrics", "/health"]).instrument(app)
+Instrumentator(
+    excluded_handlers=["/metrics", "/health"], group_unmatched_requests=True
+).instrument(app)
+
 
 @app.get("/metrics", include_in_schema=False)
 async def metrics(request: Request) -> Response:
