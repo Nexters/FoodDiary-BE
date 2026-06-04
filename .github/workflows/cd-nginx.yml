@@ -26,7 +26,7 @@ jobs:
           username: ${{ secrets.API_SERVER_USERNAME }}
           key: ${{ secrets.API_SERVER_KEY }}
           port: ${{ secrets.API_SERVER_PORT }}
-          source: "nginx/nginx.conf,nginx/docker-compose.nginx.yml"
+          source: "nginx/nginx.conf,nginx/docker-compose.nginx.yml,nginx/landing"
           target: "/home/${{ secrets.API_SERVER_USERNAME }}"
           strip_components: 0
 
@@ -53,7 +53,7 @@ jobs:
                 --agree-tos --no-eff-email
             fi
 
-            # 기존 컨테이너 정리 후 재생성
-            sudo -E docker compose -f docker-compose.nginx.yml down --remove-orphans || true
-            sudo docker rm -f mumuk-nginx mumuk-certbot 2>/dev/null || true
-            sudo -E docker compose -f docker-compose.nginx.yml up -d
+            # certbot/인증서는 그대로 두고, nginx만 새 설정+landing으로 재생성
+            # (최초 배포 시 certbot도 함께 기동, 이미 떠있으면 변경 없음)
+            sudo -E docker compose -f docker-compose.nginx.yml up -d --remove-orphans
+            sudo -E docker compose -f docker-compose.nginx.yml up -d --force-recreate --no-deps nginx
