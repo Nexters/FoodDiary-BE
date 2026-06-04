@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "nginx/**"
+      - ".github/workflows/cd-nginx.yml"
   workflow_dispatch:
 
 jobs:
@@ -18,7 +19,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Nginx 설정 파일을 서버로 전송
+      # 2. 서버 디렉토리 소유권 정리 (docker가 root로 생성한 landing 폴더 대비)
+      - name: Fix ownership before copy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.API_SERVER_HOST }}
+          username: ${{ secrets.API_SERVER_USERNAME }}
+          key: ${{ secrets.API_SERVER_KEY }}
+          port: ${{ secrets.API_SERVER_PORT }}
+          script: |
+            sudo mkdir -p /home/${{ secrets.API_SERVER_USERNAME }}/nginx/landing
+            sudo chown -R ${{ secrets.API_SERVER_USERNAME }} /home/${{ secrets.API_SERVER_USERNAME }}/nginx
+
+      # 3. Nginx 설정 파일을 서버로 전송
       - name: Copy Nginx config to server
         uses: appleboy/scp-action@v0.1.7
         with:
