@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <title>뭐먹었지</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #0a0a0f;
+        min-height: 100svh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      /* 기본: 풀스크린 (모바일) */
+      .screen {
+        width: 100%;
+        height: 100svh;
+        background: #191821;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* 데스크탑/태블릿: iPhone 14 Pro 프레임 표시 */
+      @media (min-width: 501px) {
+        body {
+          padding: 20px;
+        }
+        .screen {
+          max-width: 393px;
+          height: auto;
+          aspect-ratio: 393 / 852;
+          border-radius: 47px;
+        }
+      }
+
+      /* ── Header ─────────────────────────────── */
+      .header {
+        position: absolute;
+        top: 7%;             /* 56/800 */
+        left: 5.3%;          /* 20/375 */
+        right: 5.3%;
+        display: flex;
+        align-items: center;
+        z-index: 2;
+      }
+
+      .logo {
+        height: 56px;
+        width: auto;
+      }
+
+      /* ── Hero ───────────────────────────────── */
+      .hero {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 20.75%;         /* 166/800 */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 40px;
+        padding: 0 28px;
+        z-index: 2;
+      }
+
+      .hero-title {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .headline {
+        font-size: 24px;
+        font-weight: 800;
+        color: #F4F4F4;
+        text-align: center;
+        line-height: 1.4;
+        letter-spacing: -0.015em;
+        word-break: keep-all;
+      }
+
+      .headline-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+
+      .brand-logo {
+        height: 29px;
+        width: auto;
+        display: inline-block;
+      }
+
+      .hero-bottom {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .subtitle {
+        font-size: 12px;
+        font-weight: 400;
+        color: #F4F4F4;
+        text-align: center;
+        line-height: 1.4;
+        letter-spacing: -0.015em;
+      }
+
+      .buttons {
+        display: flex;
+        gap: 10px;
+      }
+
+      .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: #EBEBEB;
+        border: none;
+        border-radius: 12px;
+        padding: 15px 10px;
+        min-width: 140px;
+        height: 56px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #222;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .btn:active { opacity: 0.75; }
+      .btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+      /* ── Floating icons ─────────────────────────────────────────
+         Positions match Figma artboard (375×800).
+         left/top values in % of the screen container (375×800 reference).
+      ──────────────────────────────────────────────────────────── */
+      .float {
+        position: absolute;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* cont.png — 밥그릇 (90×90), Figma x=185, y=389 */
+      .icon-bowl {
+        width: 24%;          /* 90/375 */
+        left: 49.3%;         /* 185/375 */
+        top: 48.6%;          /* 389/800 */
+      }
+
+      /* _레이어_1-1.png — 음료 (67×93), Figma x=42, y=449 */
+      .icon-drink {
+        width: 17.8%;        /* 67/375 */
+        left: 11.2%;         /* 42/375 */
+        top: 56.1%;          /* 449/800 */
+      }
+
+      /* Vector.png — 작은 반짝이 (24×24), Figma x=193, y=509 */
+      .icon-spark {
+        width: 6.5%;         /* 24/375 */
+        left: 51.5%;         /* 193/375 */
+        top: 63.6%;          /* 509/800 */
+      }
+
+      /* Group 2147239415.png — 고기 (103×103), Figma x=243, y=493 */
+      .icon-meat {
+        width: 27.3%;        /* 103/375 */
+        left: 64.8%;         /* 243/375 */
+        top: 61.6%;          /* 493/800 */
+      }
+
+      /* Frame 2147239414.png — 큰 반짝이 원 (105×105), Figma x=108, y=529 */
+      .icon-circle {
+        width: 28.1%;        /* 105/375 */
+        left: 28.8%;         /* 108/375 */
+        top: 66.1%;          /* 529/800 */
+      }
+
+      /* Vector-1.png — 별 (34×34), Figma x=36, y=597 */
+      .icon-star {
+        width: 9.1%;         /* 34/375 */
+        left: 9.6%;          /* 36/375 */
+        top: 74.6%;          /* 597/800 */
+      }
+
+      /* ── Mascot ─────────────────────────────── */
+      /* _레이어_1.png — 하단 노트북 캐릭터 (299×160), Figma x=38, y=640 */
+      .mascot {
+        position: absolute;
+        width: 79.7%;        /* 299/375 */
+        left: 10.1%;         /* 38/375 */
+        top: 80%;            /* 640/800 */
+        display: block;
+        z-index: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen">
+
+      <!-- Header -->
+      <header class="header">
+        <img class="logo" src="header-logo.svg" alt="뭐먹었지 로고" />
+      </header>
+
+      <!-- Floating decorative icons (@3x for retina) -->
+      <img class="float icon-bowl"   src="bowl.png"        alt="" />
+      <img class="float icon-drink"  src="drink.png"       alt="" />
+      <img class="float icon-spark"  src="spark.png"       alt="" />
+      <img class="float icon-meat"   src="meat.png"        alt="" />
+      <img class="float icon-circle" src="circle-glow.png" alt="" />
+      <img class="float icon-star"   src="star.png"        alt="" />
+
+      <!-- Hero content -->
+      <main class="hero">
+        <div class="hero-title">
+          <h1 class="headline">여기저기 흩어진 음식 기록,</h1>
+          <div class="headline-row">
+            <span class="headline">정리는</span>
+            <img class="brand-logo" src="brand-logo.svg" alt="뭐먹었지" />
+            <span class="headline">가 해줄게요</span>
+          </div>
+        </div>
+
+        <div class="hero-bottom">
+        <p class="subtitle">앱에서 더 빠르고 편리하게 이용해보세요.</p>
+
+        <div class="buttons">
+          <a class="btn" href="https://apps.apple.com/kr/app/%EB%AD%90%EB%A8%B9%EC%97%88%EC%A7%80/id6758536988">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+            </svg>
+            App Store
+          </a>
+          <a class="btn" href="https://play.google.com/store/apps/details?id=com.nexters.fooddiary&pcampaignid=web_share">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M3.18 23.5c.3.17.64.25.99.22l.1-.06L14.54 12 11 8.46 3.18 23.5z" fill="#EA4335"/>
+              <path d="M20.46 10.18 17.2 8.3l-3.96 3.7 3.97 3.73 3.26-1.9a1.89 1.89 0 0 0 0-3.65z" fill="#FBBC04"/>
+              <path d="M4.17.28A1.9 1.9 0 0 0 3 2.04v19.92c0 .69.37 1.3.95 1.63L14.54 12 4.17.28z" fill="#4285F4"/>
+              <path d="M4.27.22 14.54 12l3.96-3.7L5.08.09a1.9 1.9 0 0 0-.81.13z" fill="#34A853"/>
+            </svg>
+            Google Play
+          </a>
+        </div>
+        </div>
+      </main>
+
+      <!-- Mascot -->
+      <img class="mascot" src="mascot.png" alt="뭐먹었지 마스코트" />
+
+    </div>
+
+    <script>
+      (function () {
+        var APP_STORE  = 'https://apps.apple.com/kr/app/%EB%AD%90%EB%A8%B9%EC%97%88%EC%A7%80/id6758536988';
+        var PLAY_STORE = 'https://play.google.com/store/apps/details?id=com.nexters.fooddiary&pcampaignid=web_share';
+
+        var ua = navigator.userAgent || navigator.vendor || '';
+
+        // iOS (iPhone/iPad/iPod)
+        var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+        // iPadOS 13+ (데스크탑 UA 위장)
+        var isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        // Android
+        var isAndroid = /android/i.test(ua);
+
+        if (isIOS || isIPadOS) {
+          window.location.replace(APP_STORE);
+        } else if (isAndroid) {
+          window.location.replace(PLAY_STORE);
+        }
+        // 그 외 (데스크탑 등): 그대로 랜딩 페이지에 머무름
+      })();
+    </script>
+  </body>
+</html>
